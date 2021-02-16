@@ -1,0 +1,6 @@
+[CONTROL]
+disable=E1101
+
+[FORMAT]
+max-line-length=240
+
