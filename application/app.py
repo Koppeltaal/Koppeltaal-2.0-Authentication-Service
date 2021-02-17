@@ -44,7 +44,7 @@ def ensure_oidc_keys(app):
 
 def create_app(config=None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
-    app = FlaskBehindProxy(app)
+    FlaskBehindProxy(app)
     if config is None:
         # load the instance config, if it exists, when not testing
         app.config.from_pyfile('config.py')
