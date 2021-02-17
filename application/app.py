@@ -7,6 +7,7 @@
 from authlib.jose import JsonWebKey, Key
 from cryptography.hazmat.primitives import serialization
 from flask import Flask
+from flask_behind_proxy import FlaskBehindProxy
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
@@ -43,6 +44,7 @@ def ensure_oidc_keys(app):
 
 def create_app(config=None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
+    app = FlaskBehindProxy(app)
     if config is None:
         # load the instance config, if it exists, when not testing
         app.config.from_pyfile('config.py')
