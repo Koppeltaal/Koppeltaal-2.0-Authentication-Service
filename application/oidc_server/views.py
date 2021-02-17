@@ -5,12 +5,12 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 from time import time
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from authlib.jose import JsonWebKey, Key
 from authlib.jose import jwt
 from flask import Blueprint, redirect, request, jsonify, current_app, render_template
-from requests.packages.urllib3.packages.six.moves.urllib.parse import urlencode
 
 from application.database import db
 from application.irma_client import irma_client
@@ -83,7 +83,6 @@ def create_blueprint() -> Blueprint:
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth2_token.session_id).first()
         if oauth2_session is None:
             return 'Bad Request', 400
-
 
         assert scope == oauth2_token.scope
         oauth2_token.id_token = get_id_token(oauth2_token, private_key, public_key)
