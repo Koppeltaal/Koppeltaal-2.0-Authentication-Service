@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from authlib.jose import JsonWebKey, Key
 from authlib.jose import jwt
-from flask import Blueprint, redirect, request, jsonify, current_app, render_template
+from flask import Blueprint, redirect, request, jsonify, current_app, render_template, session
 
 from application.database import db
 from application.irma_client import irma_client
@@ -30,8 +30,22 @@ def create_blueprint() -> Blueprint:
         oauth_session.redirect_uri = request.values.get('redirect_uri')
         oauth_session.state = request.values.get('state')
         oauth_session.code = str(uuid4())
+
+        if 'username' in session:
+            username = session['username']
+            oauth_session.username = username
+
         db.session.add(oauth_session)
         db.session.commit()
+
+        # If the username is set, the user is identified.
+        if not oauth_session.username is None:
+            if not oauth_session.consent:
+                return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
+            else:
+                return redirect(
+                    f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
+
 
         return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
 
@@ -40,8 +54,9 @@ def create_blueprint() -> Blueprint:
         oauth_session_id = request.values['session']
         oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
         scopes = oauth_session.scope.split(' ')
+        keep = 'username' in session
         return render_template('oauth2_consent.html', username=oauth_session.username, session=oauth_session_id,
-                               scopes=scopes, client_id=oauth_session.client_id)
+                               scopes=scopes, client_id=oauth_session.client_id,  keep=keep)
 
     @blueprint.route('/oauth2/consent', methods=['POST'])
     def consent_post():
@@ -50,6 +65,12 @@ def create_blueprint() -> Blueprint:
 
         oauth_session.scope = ' '.join(request.form.getlist('scope'))
         oauth_session.consent = True
+
+        if 'keep' in request.values:
+            session['username'] = oauth_session.username
+        else:
+            session['username'] = None
+
         db.session.add(oauth_session)
         db.session.commit()
 

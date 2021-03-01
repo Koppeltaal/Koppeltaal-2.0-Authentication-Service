@@ -31,8 +31,24 @@
                         </label>
                     </p>
                 {% endfor %}
-
-
+            </div>
+        </div>
+        <div class="row">
+            <div class="col s12">
+                <h2>Remember me</h2>
+                <p>
+                    If you check this option, the system will keep your data for the next login with this browser.
+                </p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col offset-s1 s12">
+                <p>
+                    <label>
+                        <input name="keep" type="checkbox" {{ 'checked' if keep else '' }}/>
+                        <span>Keep me logged in</span>
+                    </label>
+                </p>
             </div>
         </div>
         <div class="row">
