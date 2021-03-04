@@ -13,7 +13,8 @@
     <div class="row">
         <div class="col s12">
             <h1>Please give consent</h1>
-            <p>Hello, <strong>{{ username }}</strong></p>
+            <h2>Hello, <strong>{{ username }}</strong></h2>
+            <p>Not you? <a href="restart?session={{ session }}">Start again</a></p>
             <p>The application <strong>{{ client_id }}</strong> wants to access the following items on the FHIR
                 repository.
             </p>

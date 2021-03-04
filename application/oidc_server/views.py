@@ -38,6 +38,19 @@ def create_blueprint() -> Blueprint:
         db.session.add(oauth_session)
         db.session.commit()
 
+        return _route_from_authorise(oauth_session)
+
+    @blueprint.route('/oauth2/restart')
+    def restart():
+        oauth_session_id = request.values['session']
+        oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
+        oauth_session.consent = False
+        oauth_session.username = None
+        db.session.add(oauth_session)
+        db.session.commit()
+        return _route_from_authorise(oauth_session)
+
+    def _route_from_authorise(oauth_session):
         # If the username is set, the user is identified.
         if not oauth_session.username is None:
             if not oauth_session.consent:
@@ -45,8 +58,6 @@ def create_blueprint() -> Blueprint:
             else:
                 return redirect(
                     f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
-
-
         return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
 
     @blueprint.route('/oauth2/consent', methods=['GET'])
@@ -99,6 +110,7 @@ def create_blueprint() -> Blueprint:
         scope = request.values.get('scope')
         oauth2_token: Oauth2Token = Oauth2Token.query.filter_by(refresh_token=refresh_token).first()
         if oauth2_token is None:
+            print(f'Cannot locate Oauth2Token with refresh token {refresh_token}')
             return 'Bad Request', 400
 
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth2_token.session_id).first()
@@ -110,8 +122,9 @@ def create_blueprint() -> Blueprint:
         oauth2_token.access_token = get_access_token(oauth2_token, oauth2_session, private_key, public_key)
         oauth2_token.refresh_token = get_refresh_token(private_key, public_key)
         db.session.add(oauth2_token)
+        json = oauth2_token_to_json(oauth2_token)
         db.session.commit()
-        return jsonify(oauth2_token_to_json(oauth2_token))
+        return jsonify(json)
 
     def oauth2_token_to_json(oauth2_token):
         return {'access_token': oauth2_token.access_token,
