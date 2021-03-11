@@ -176,8 +176,8 @@ def create_blueprint() -> Blueprint:
         payload = {
             'iss': request.url_root,
             'aud': aud,
-            'nbf': time(),
-            'exp': time() + expiry,
+            'nbf': int(time()),
+            'exp': int(time() + expiry),
             'nonce': str(uuid4())}
         if type is not None:
             payload['type'] = type
