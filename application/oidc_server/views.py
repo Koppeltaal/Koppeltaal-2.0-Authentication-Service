@@ -29,6 +29,7 @@ def create_blueprint() -> Blueprint:
         oauth_session.client_id = request.values.get('client_id')
         oauth_session.redirect_uri = request.values.get('redirect_uri')
         oauth_session.state = request.values.get('state')
+        oauth_session.launch = request.values.get('launch', None)
         oauth_session.code = str(uuid4())
 
         if 'username' in session:
@@ -120,7 +121,8 @@ def create_blueprint() -> Blueprint:
         assert scope == oauth2_token.scope
         oauth2_token.id_token = get_id_token(oauth2_token, private_key, public_key)
         oauth2_token.access_token = get_access_token(oauth2_token, oauth2_session, private_key, public_key)
-        oauth2_token.refresh_token = get_refresh_token(private_key, public_key)
+        if oauth2_token.refresh_token:
+            oauth2_token.refresh_token = get_refresh_token()
         db.session.add(oauth2_token)
         json = oauth2_token_to_json(oauth2_token)
         db.session.commit()
@@ -146,7 +148,7 @@ def create_blueprint() -> Blueprint:
         private_key, public_key = get_keypair()
         oauth2_token.id_token = get_id_token(oauth2_token, private_key, public_key)
         oauth2_token.access_token = get_access_token(oauth2_token, oauth2_session, private_key, public_key)
-        oauth2_token.refresh_token = get_refresh_token(private_key, public_key)
+        oauth2_token.refresh_token = get_refresh_token()
         oauth2_token.session_id = oauth2_session.id
         db.session.add(oauth2_token)
         db.session.commit()
@@ -167,9 +169,8 @@ def create_blueprint() -> Blueprint:
                               public_key, 'fhir-server', type='access', sub=oauth2_token.subject,
                               scope=oauth_session.scope)
 
-    def get_refresh_token(private_key: Key, public_key: Key) -> str:
-        return _get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_REFRESH_TOKEN'], private_key,
-                              public_key, 'fhir-server', type='refresh')
+    def get_refresh_token() -> str:
+        return str(uuid4())
 
     def _get_jwt_token(expiry: int, private_key: Key, public_key: Key, aud: str, type: str = None, sub: str = None,
                        email: str = None, scope: str = None) -> str:
@@ -198,9 +199,13 @@ def create_blueprint() -> Blueprint:
     def irma_auth():
         token = request.values['token']
         oauth_session_id = request.values['session']
+
         username = irma_client.validate_token(token)
 
+
         oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
+        if oauth_session.launch:
+            jwt.decode(oauth_session.launch, )
         oauth_session.username = username
 
         db.session.commit()

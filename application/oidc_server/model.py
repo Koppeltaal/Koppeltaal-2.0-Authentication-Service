@@ -18,6 +18,7 @@ class Oauth2Session(db.Model):
     client_id = db.Column(db.String(80))
     redirect_uri = db.Column(db.String(128))
     state = db.Column(db.String(128))
+    launch = db.Column(db.String(512))
 
     username = db.Column(db.String(80))
     code = db.Column(db.String(80), unique=True, nullable=False)
