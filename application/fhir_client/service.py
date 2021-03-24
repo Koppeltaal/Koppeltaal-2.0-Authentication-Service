@@ -50,7 +50,7 @@ class FhirClient:
         return self.read_bundle(bundle)
 
     def _get_server_base(self):
-        return current_app.config['FHIR_SERVER_BASE']
+        return current_app.config['FHIR_CLIENT_SERVERURL']
 
     def get_resource_by_identifier(self, identifier_system, identifier_value, access_token, resource_type):
         server_base = self._get_server_base()
