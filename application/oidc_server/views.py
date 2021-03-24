@@ -4,17 +4,18 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-from time import time
+import json
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from authlib.jose import JsonWebKey, Key
 from authlib.jose import jwt
 from flask import Blueprint, redirect, request, jsonify, current_app, render_template, session
 
 from application.database import db
+from application.fhir_client import fhir_client
 from application.irma_client import irma_client
 from application.oidc_server.model import Oauth2Session, Oauth2Token
+from application.oidc_server.service import token_service
 
 
 def create_blueprint() -> Blueprint:
@@ -32,34 +33,25 @@ def create_blueprint() -> Blueprint:
         oauth_session.launch = request.values.get('launch', None)
         oauth_session.code = str(uuid4())
 
-        if 'username' in session:
+        if 'username' in session:  # Fixme:
             username = session['username']
-            oauth_session.username = username
+            _update_fhir_user(oauth_session, username)
 
         db.session.add(oauth_session)
         db.session.commit()
 
-        return _route_from_authorise(oauth_session)
+        return route_from_authorise(oauth_session)
 
     @blueprint.route('/oauth2/restart')
     def restart():
         oauth_session_id = request.values['session']
         oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
         oauth_session.consent = False
-        oauth_session.username = None
+        _update_fhir_user(oauth_session, None)
+        oauth_session.user_fhir_reference = None
         db.session.add(oauth_session)
         db.session.commit()
-        return _route_from_authorise(oauth_session)
-
-    def _route_from_authorise(oauth_session):
-        # If the username is set, the user is identified.
-        if not oauth_session.username is None:
-            if not oauth_session.consent:
-                return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
-            else:
-                return redirect(
-                    f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
-        return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
+        return route_from_authorise(oauth_session)
 
     @blueprint.route('/oauth2/consent', methods=['GET'])
     def consent_get():
@@ -68,7 +60,7 @@ def create_blueprint() -> Blueprint:
         scopes = oauth_session.scope.split(' ')
         keep = 'username' in session
         return render_template('oauth2_consent.html', username=oauth_session.username, session=oauth_session_id,
-                               scopes=scopes, client_id=oauth_session.client_id,  keep=keep)
+                               scopes=scopes, client_id=oauth_session.client_id, keep=keep)
 
     @blueprint.route('/oauth2/consent', methods=['POST'])
     def consent_post():
@@ -100,13 +92,38 @@ def create_blueprint() -> Blueprint:
         else:
             return 'Bad Request', 400
 
+    @blueprint.route('/oauth2/irma-auth')
+    def irma_auth():
+        token = request.values['token']
+        oauth_session_id = request.values['session']
+
+        username = irma_client.validate_token(token)
+
+        oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
+        if oauth_session.launch:
+            jwt.decode(oauth_session.launch, )
+        _update_fhir_user(oauth_session, username)
+
+        db.session.commit()
+
+        if not oauth_session.consent:
+            return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
+        else:
+            return redirect(
+                f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
+
+    def route_from_authorise(oauth_session):
+        # If the username is set, the user is identified.
+        if not oauth_session.username is None:
+            if not oauth_session.consent:
+                return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
+            else:
+                return redirect(
+                    f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
+        return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
+
     def token_refresh_token():
         refresh_token = request.values.get('refresh_token')
-
-        private_key, public_key = get_keypair()
-        refresh_token_claims = jwt.decode(refresh_token, public_key)
-        if refresh_token_claims.get('exp') < time():
-            return 'Bad Request', 400
 
         scope = request.values.get('scope')
         oauth2_token: Oauth2Token = Oauth2Token.query.filter_by(refresh_token=refresh_token).first()
@@ -119,21 +136,29 @@ def create_blueprint() -> Blueprint:
             return 'Bad Request', 400
 
         assert scope == oauth2_token.scope
-        oauth2_token.id_token = get_id_token(oauth2_token, private_key, public_key)
-        oauth2_token.access_token = get_access_token(oauth2_token, oauth2_session, private_key, public_key)
-        if oauth2_token.refresh_token:
-            oauth2_token.refresh_token = get_refresh_token()
+        oauth2_token.id_token = token_service.get_id_token(oauth2_token)
+        oauth2_token.access_token = token_service.get_access_token(oauth2_token, oauth2_session)
+        if oauth2_token.refresh_token is None:
+            oauth2_token.refresh_token = token_service.get_refresh_token()
         db.session.add(oauth2_token)
-        json = oauth2_token_to_json(oauth2_token)
+        json = oauth2_token_to_json(oauth2_token, oauth2_session)
         db.session.commit()
         return jsonify(json)
 
-    def oauth2_token_to_json(oauth2_token):
-        return {'access_token': oauth2_token.access_token,
-                "token_type": "Bearer",
-                "refresh_token": oauth2_token.refresh_token,
-                "id_token": oauth2_token.id_token,
-                "expires_in": current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN']}
+    def oauth2_token_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session):
+        rv = {'access_token': oauth2_token.access_token,
+              "token_type": "Bearer",
+              "refresh_token": oauth2_token.refresh_token,
+              "id_token": oauth2_token.id_token,
+              "expires_in": current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN']}
+
+        if oauth2_session.launch and oauth2_session.launch.count('.') == 2:
+            body = json.loads(oauth2_session.launch.split('.')[1])
+            rv['patient'] = body['owner']['reference']
+            rv['task'] = body['definitionReference']['reference']
+            rv['practitioner'] = body['requester']['reference']
+
+        return rv
 
     def token_authorization_code():
         code = request.values.get('code')
@@ -142,78 +167,37 @@ def create_blueprint() -> Blueprint:
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(code=code).first()
         assert redirect_uri == oauth2_session.redirect_uri
         oauth2_token = Oauth2Token()
-        oauth2_token.subject = oauth2_session.username
+        oauth2_token.email = oauth2_session.email
+        oauth2_token.name_family = oauth2_session.name_family
+        oauth2_token.name_given = oauth2_session.name_given
+        oauth2_token.subject = oauth2_session.user_fhir_reference
         oauth2_token.scope = oauth2_session.scope
         oauth2_token.client_id = oauth2_session.client_id
-        private_key, public_key = get_keypair()
-        oauth2_token.id_token = get_id_token(oauth2_token, private_key, public_key)
-        oauth2_token.access_token = get_access_token(oauth2_token, oauth2_session, private_key, public_key)
-        oauth2_token.refresh_token = get_refresh_token()
+        oauth2_token.id_token = token_service.get_id_token(oauth2_token)
+        oauth2_token.access_token = token_service.get_access_token(oauth2_token, oauth2_session)
+        oauth2_token.refresh_token = token_service.get_refresh_token()
         oauth2_token.session_id = oauth2_session.id
         db.session.add(oauth2_token)
         db.session.commit()
-        return jsonify(oauth2_token_to_json(oauth2_token))
+        return jsonify(oauth2_token_to_json(oauth2_token, oauth2_session))
 
-    def get_keypair():
-        public_key: Key = JsonWebKey.import_key(current_app.config['OIDC_JWT_PUBLIC_KEY'])
-        private_key: Key = JsonWebKey.import_key(current_app.config['OIDC_JWT_PRIVATE_KEY'])
-        return private_key, public_key
-
-    def get_id_token(oauth2_token: Oauth2Token, private_key: Key, public_key: Key) -> str:
-        return _get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'], private_key,
-                              public_key, oauth2_token.client_id, sub=oauth2_token.subject, email=oauth2_token.subject)
-
-    def get_access_token(oauth2_token: Oauth2Token, oauth_session: Oauth2Session, private_key: Key,
-                         public_key: Key) -> str:
-        return _get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'], private_key,
-                              public_key, 'fhir-server', type='access', sub=oauth2_token.subject,
-                              scope=oauth_session.scope)
-
-    def get_refresh_token() -> str:
-        return str(uuid4())
-
-    def _get_jwt_token(expiry: int, private_key: Key, public_key: Key, aud: str, type: str = None, sub: str = None,
-                       email: str = None, scope: str = None) -> str:
-        payload = {
-            'iss': request.url_root,
-            'aud': aud,
-            'nbf': int(time()),
-            'exp': int(time() + expiry),
-            'nonce': str(uuid4())}
-        if type is not None:
-            payload['type'] = type
-
-        if sub is not None:
-            payload['sub'] = sub
-
-        if email is not None:
-            payload['email'] = email
-
-        if scope is not None:
-            payload['scope'] = scope
-
-        header = {'kid': public_key.thumbprint(), 'alg': 'RS512'}
-        return jwt.encode(header, payload, private_key).decode('ascii')
-
-    @blueprint.route('/oauth2/irma-auth')
-    def irma_auth():
-        token = request.values['token']
-        oauth_session_id = request.values['session']
-
-        username = irma_client.validate_token(token)
-
-
-        oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
-        if oauth_session.launch:
-            jwt.decode(oauth_session.launch, )
-        oauth_session.username = username
-
-        db.session.commit()
-
-        if not oauth_session.consent:
-            return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
+    def _update_fhir_user(oauth_session, username):
+        if username is None:
+            oauth_session.username = None
+            oauth_session.email = None
+            oauth_session.name_family = None
+            oauth_session.name_given = None
         else:
-            return redirect(
-                f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
+            fhir_user = fhir_client.get_or_create_fhir_user(username)
+            oauth_session.username = username
+            oauth_session.email = username
+            oauth_session.user_fhir_reference = f"{fhir_user['resourceType']}/{fhir_user['id']}"
+            if 'name' in fhir_user and len(fhir_user['name']) > 0:
+                oauth_session.name_family = fhir_user['name'][0]['family']
+                oauth_session.name_given = ''
+                for user in fhir_user['name'][0]['given']:
+                    if len(oauth_session.name_given) > 0:
+                        oauth_session.name_given += ' '
+                    oauth_session.name_given += user
 
     return blueprint

@@ -21,6 +21,10 @@ class Oauth2Session(db.Model):
     launch = db.Column(db.String(512))
 
     username = db.Column(db.String(80))
+    email = db.Column(db.String(80))
+    name_given = db.Column(db.String(80))
+    name_family = db.Column(db.String(80))
+    user_fhir_reference = db.Column(db.String(80))
     code = db.Column(db.String(80), unique=True, nullable=False)
     consent = db.Column(db.Boolean, default=False)
 
@@ -36,6 +40,9 @@ class Oauth2Token(db.Model):
     id_token = db.Column(db.String(256))
     scope = db.Column(db.String(128))
     subject = db.Column(db.String(128))
+    email = db.Column(db.String(128))
+    name_given = db.Column(db.String(128))
+    name_family = db.Column(db.String(128))
     session_id = db.Column(GUID(), db.ForeignKey(Oauth2Session.id), nullable=False)
 
     def to_json(self):
