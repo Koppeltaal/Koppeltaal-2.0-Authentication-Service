@@ -18,14 +18,14 @@ def envget_str(key: str, dflt: str = '') -> str:
     return os.environ[key] if key in os.environ else dflt
 
 
-def envget_int(key: str, dflt: int = 0) -> str:
+def envget_int(key: str, dflt: int = 0) -> int:
     """
     Gets a value from the os.environ, and defaults to the value of dflt if not set in the environment.
     :param key: environment variable name
     :param dflt: default value, if not present in the environment
     :return: either the value of the environment variable or the default value (dflt)
     """
-    return str(int(os.environ[key]) if key in os.environ else dflt)
+    return int(os.environ[key]) if key in os.environ else dflt
 
 
 def envget_bool(key, dflt: bool = False) -> bool:
