@@ -165,7 +165,7 @@ def create_blueprint() -> Blueprint:
                     if 'definitionReference' in task:
                         rv['task'] = task['definitionReference']['reference']
                     if 'requester' in task:
-                        rv['practitioner'] = body['requester']['reference']
+                        rv['practitioner'] = task['requester']['reference']
             except JSONDecodeError:
                 print(f'Failed to process token: {oauth2_session.launch}')
 
