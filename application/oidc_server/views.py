@@ -5,6 +5,7 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import json
+from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -153,10 +154,13 @@ def create_blueprint() -> Blueprint:
               "expires_in": current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN']}
 
         if oauth2_session.launch and oauth2_session.launch.count('.') == 2:
-            body = json.loads(oauth2_session.launch.split('.')[1])
-            rv['patient'] = body['owner']['reference']
-            rv['task'] = body['definitionReference']['reference']
-            rv['practitioner'] = body['requester']['reference']
+            try:
+                body = json.loads(oauth2_session.launch.split('.')[1])
+                rv['patient'] = body['owner']['reference']
+                rv['task'] = body['definitionReference']['reference']
+                rv['practitioner'] = body['requester']['reference']
+            except JSONDecodeError:
+                print(f'Failed to process token: {oauth2_session.launch}')
 
         return rv
 
