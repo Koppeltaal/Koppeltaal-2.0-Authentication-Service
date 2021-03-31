@@ -5,6 +5,7 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import json
+from encodings.base64_codec import base64_decode
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -101,8 +102,8 @@ def create_blueprint() -> Blueprint:
         username = irma_client.validate_token(token)
 
         oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
-        if oauth_session.launch:
-            jwt.decode(oauth_session.launch, )
+        # if oauth_session.launch:
+        #     jwt.decode(oauth_session.launch, )
         _update_fhir_user(oauth_session, username)
 
         db.session.commit()
@@ -155,10 +156,16 @@ def create_blueprint() -> Blueprint:
 
         if oauth2_session.launch and oauth2_session.launch.count('.') == 2:
             try:
-                body = json.loads(oauth2_session.launch.split('.')[1])
-                rv['patient'] = body['owner']['reference']
-                rv['task'] = body['definitionReference']['reference']
-                rv['practitioner'] = body['requester']['reference']
+                body_encoded = oauth2_session.launch.split('.')[1]
+                body = json.loads(base64_decode(body_encoded.encode('ascii') + b'===')[0].decode('ascii'))
+                if 'task' in body:
+                    task = body['task']
+                    if 'owner' in task:
+                        rv['patient'] = task['owner']['reference']
+                    if 'definitionReference' in task:
+                        rv['task'] = task['definitionReference']['reference']
+                    if 'requester' in task:
+                        rv['practitioner'] = body['requester']['reference']
             except JSONDecodeError:
                 print(f'Failed to process token: {oauth2_session.launch}')
 
