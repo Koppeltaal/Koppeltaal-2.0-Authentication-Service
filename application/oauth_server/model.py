@@ -7,7 +7,7 @@
 from uuid import uuid4
 
 from application.database import db
-from application.oidc_server.guid import GUID
+from application.oauth_server.guid import GUID
 
 
 class Oauth2Session(db.Model):
@@ -32,6 +32,11 @@ class Oauth2Session(db.Model):
         return f'<Oauth2Session {self.id}>'
 
 
+class Oauth2ClientCredentials(db.Model):
+    id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
+    client_id = db.Column(db.String(80))
+    client_secret = db.Column(db.String(80))
+
 class Oauth2Token(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     client_id = db.Column(db.String(80))
@@ -43,7 +48,7 @@ class Oauth2Token(db.Model):
     email = db.Column(db.String(128))
     name_given = db.Column(db.String(128))
     name_family = db.Column(db.String(128))
-    session_id = db.Column(GUID(), db.ForeignKey(Oauth2Session.id), nullable=False)
+    session_id = db.Column(GUID(), db.ForeignKey(Oauth2Session.id))
 
     def to_json(self):
         return {'client_id': self.client_id,

@@ -3,21 +3,19 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
 import json
 from encodings.base64_codec import base64_decode
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from authlib.jose import jwt
 from flask import Blueprint, redirect, request, jsonify, current_app, render_template, session
 
 from application.database import db
 from application.fhir_client import fhir_client
 from application.irma_client import irma_client
-from application.oidc_server.model import Oauth2Session, Oauth2Token
-from application.oidc_server.service import token_service
+from application.oauth_server.model import Oauth2Session, Oauth2Token
+from application.oauth_server.service import token_service, oauth2_client_credentials_service
 
 
 def create_blueprint() -> Blueprint:
@@ -91,6 +89,8 @@ def create_blueprint() -> Blueprint:
             return token_authorization_code()
         if grant_type == 'refresh_token':
             return token_refresh_token()
+        if grant_type == 'client_credentials':
+            return token_client_credentials()
         else:
             return 'Bad Request', 400
 
@@ -102,8 +102,6 @@ def create_blueprint() -> Blueprint:
         username = irma_client.validate_token(token)
 
         oauth_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth_session_id).first()
-        # if oauth_session.launch:
-        #     jwt.decode(oauth_session.launch, )
         _update_fhir_user(oauth_session, username)
 
         db.session.commit()
@@ -133,13 +131,15 @@ def create_blueprint() -> Blueprint:
             print(f'Cannot locate Oauth2Token with refresh token {refresh_token}')
             return 'Bad Request', 400
 
-        oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(id=oauth2_token.session_id).first()
-        if oauth2_session is None:
-            return 'Bad Request', 400
+        oauth2_session = None
+        if oauth2_token.session_id:
+            oauth2_session = Oauth2Session.query.filter_by(id=oauth2_token.session_id).first()
+            if oauth2_session is None:
+                return 'Bad Request', 400
 
         assert scope == oauth2_token.scope
         oauth2_token.id_token = token_service.get_id_token(oauth2_token)
-        oauth2_token.access_token = token_service.get_access_token(oauth2_token, oauth2_session)
+        oauth2_token.access_token = token_service.get_access_token(oauth2_token, scope)
         if oauth2_token.refresh_token is None:
             oauth2_token.refresh_token = token_service.get_refresh_token()
         db.session.add(oauth2_token)
@@ -147,14 +147,16 @@ def create_blueprint() -> Blueprint:
         db.session.commit()
         return jsonify(json)
 
-    def oauth2_token_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session):
+    def oauth2_token_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session = None):
         rv = {'access_token': oauth2_token.access_token,
               "token_type": "Bearer",
               "refresh_token": oauth2_token.refresh_token,
-              "id_token": oauth2_token.id_token,
               "expires_in": current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN']}
 
-        if oauth2_session.launch and oauth2_session.launch.count('.') == 2:
+        if oauth2_token.id_token:
+            rv['id_token'] = oauth2_token.id_token
+
+        if oauth2_session and oauth2_session.launch and oauth2_session.launch.count('.') == 2:
             try:
                 body_encoded = oauth2_session.launch.split('.')[1]
                 body = json.loads(base64_decode(body_encoded.encode('ascii') + b'===')[0].decode('ascii'))
@@ -185,12 +187,26 @@ def create_blueprint() -> Blueprint:
         oauth2_token.scope = oauth2_session.scope
         oauth2_token.client_id = oauth2_session.client_id
         oauth2_token.id_token = token_service.get_id_token(oauth2_token)
-        oauth2_token.access_token = token_service.get_access_token(oauth2_token, oauth2_session)
+        oauth2_token.access_token = token_service.get_access_token(oauth2_token, oauth2_session.scope)
         oauth2_token.refresh_token = token_service.get_refresh_token()
         oauth2_token.session_id = oauth2_session.id
         db.session.add(oauth2_token)
         db.session.commit()
         return jsonify(oauth2_token_to_json(oauth2_token, oauth2_session))
+
+    def token_client_credentials():
+        client_id = request.values.get('client_id')
+        client_secret = request.values.get('client_secret')
+        if oauth2_client_credentials_service.check_client_credentials(client_id, client_secret):
+            scope = '*/write'
+            oauth2_token = Oauth2Token()
+            oauth2_token.client_id = client_id
+            oauth2_token.access_token = token_service.get_access_token(oauth2_token, scope)
+            oauth2_token.refresh_token = token_service.get_refresh_token()
+            db.session.add(oauth2_token)
+            db.session.commit()
+            return jsonify(oauth2_token_to_json(oauth2_token))
+        return 'Access Denied', 401
 
     def _update_fhir_user(oauth_session, username):
         if username is None:

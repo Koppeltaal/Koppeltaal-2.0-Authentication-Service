@@ -11,12 +11,13 @@ from flask_behind_proxy import FlaskBehindProxy
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
-from application import oidc_server, jwks
+from application import oauth_server, jwks
 from application.database import db
+from application.oauth_server.service import oauth2_client_credentials_service
 
 
 def register_blueprints(app):
-    app.register_blueprint(oidc_server.views.create_blueprint())
+    app.register_blueprint(oauth_server.views.create_blueprint())
     app.register_blueprint(jwks.views.create_blueprint())
 
 
@@ -71,3 +72,11 @@ def setup_database(app: Flask):
     db.init_app(app)
     with app.app_context():
         db.create_all()
+
+    with app.app_context():
+        client_credentials:str = app.config['MODULE_CLIENT_CREDENTIALS']
+        for client_credential in client_credentials.split(','):
+            client_credential = client_credential.strip()
+            if ':' in client_credential:
+                key, secret = client_credential.split(':', 1)
+                oauth2_client_credentials_service.store_client_credentials(key, secret)

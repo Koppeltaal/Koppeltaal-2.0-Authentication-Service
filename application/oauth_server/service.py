@@ -5,7 +5,8 @@ from authlib.jose import Key, JsonWebKey
 from authlib.jose import jwt
 from flask import request, current_app
 
-from application.oidc_server.model import Oauth2Session, Oauth2Token
+from application.database import db
+from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials
 
 
 class TokenService:
@@ -14,9 +15,9 @@ class TokenService:
                                    sub=oauth2_token.subject, email=oauth2_token.email,
                                    given_name=oauth2_token.name_given, family_name=oauth2_token.name_family)
 
-    def get_access_token(self, oauth2_token: Oauth2Token, oauth_session: Oauth2Session) -> str:
+    def get_access_token(self, oauth2_token: Oauth2Token, scope: str) -> str:
         return self._get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'], 'fhir-server', type='access',
-                                   sub=oauth2_token.subject, scope=oauth_session.scope)
+                                   sub=oauth2_token.subject, scope=scope)
 
     def get_system_access_token(self, username: str) -> str:
         return self._get_jwt_token(120, 'fhir-server', 'access', username, None,
@@ -60,4 +61,24 @@ class TokenService:
         private_key: Key = JsonWebKey.import_key(current_app.config['OIDC_JWT_PRIVATE_KEY'])
         return private_key, public_key
 
+
+class Oauth2ClientCredentialsService:
+    def check_client_credentials(self, client_id: str, client_secret: str):
+        credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
+        if credentials:
+            return client_secret == credentials.client_secret
+        return False
+
+    def store_client_credentials(self, client_id: str, client_secret: str):
+        credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
+        if not credentials:
+            credentials = Oauth2ClientCredentials()
+            credentials.client_id = client_id
+
+        credentials.client_secret = client_secret
+        db.session.add(credentials)
+        db.session.commit()
+
+
 token_service = TokenService()
+oauth2_client_credentials_service = Oauth2ClientCredentialsService()

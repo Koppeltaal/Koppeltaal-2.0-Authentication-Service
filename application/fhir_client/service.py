@@ -6,7 +6,7 @@ from urllib.request import Request
 
 from flask import current_app
 
-from application.oidc_server.service import token_service
+from application.oauth_server.service import token_service
 
 
 class FhirClient:
@@ -78,7 +78,7 @@ class FhirClient:
             fhir_user = fhir_client.get_fhir_practitioner(username, token)
         if not fhir_user:
             fhir_user = fhir_client.get_fhir_related_person(username, token)
-        if not fhir_user:
+        if not fhir_user:  # Fallback to Person
             fhir_user = fhir_client.get_fhir_person(username, token)
 
         if not fhir_user:
