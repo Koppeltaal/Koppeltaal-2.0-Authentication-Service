@@ -114,13 +114,13 @@ def create_blueprint() -> Blueprint:
 
     def route_from_authorise(oauth_session):
         # If the username is set, the user is identified.
-        if not oauth_session.username is None:
-            if not oauth_session.consent:
-                return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
-            else:
-                return redirect(
-                    f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
-        return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
+        if oauth_session.username is None:
+            return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
+        if not oauth_session.consent:
+            return redirect('/oauth2/consent?' + urlencode({'session': oauth_session.id}))
+        else:
+            return redirect(
+                f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
 
     def token_refresh_token():
         refresh_token = request.values.get('refresh_token')
