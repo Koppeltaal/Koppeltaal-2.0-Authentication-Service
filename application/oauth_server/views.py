@@ -201,6 +201,7 @@ def create_blueprint() -> Blueprint:
             scope = '*/write'
             oauth2_token = Oauth2Token()
             oauth2_token.client_id = client_id
+            oauth2_token.scope = scope
             oauth2_token.access_token = token_service.get_access_token(oauth2_token, scope)
             oauth2_token.refresh_token = token_service.get_refresh_token()
             db.session.add(oauth2_token)
