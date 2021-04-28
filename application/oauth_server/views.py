@@ -8,6 +8,7 @@ from encodings.base64_codec import base64_decode
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
+from basicauth import decode
 
 from flask import Blueprint, redirect, request, jsonify, current_app, render_template, session
 
@@ -197,6 +198,8 @@ def create_blueprint() -> Blueprint:
     def token_client_credentials():
         client_id = request.values.get('client_id')
         client_secret = request.values.get('client_secret')
+        if not client_id or not client_secret:
+            client_id, client_secret = decode(request.headers['Authorization'])
         if oauth2_client_credentials_service.check_client_credentials(client_id, client_secret):
             scope = '*/write'
             oauth2_token = Oauth2Token()
