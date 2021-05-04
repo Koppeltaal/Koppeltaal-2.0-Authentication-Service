@@ -196,9 +196,9 @@ def create_blueprint() -> Blueprint:
         return jsonify(oauth2_token_to_json(oauth2_token, oauth2_session))
 
     def token_client_credentials():
-        client_id = request.values.get('client_id')
-        client_secret = request.values.get('client_secret')
-        if not client_id or not client_secret:
+        client_id = request.form.get('client_id')
+        client_secret = request.form.get('client_secret')
+        if (not client_id or not client_secret) and 'Authorization' in request.headers:
             client_id, client_secret = decode(request.headers['Authorization'])
         if oauth2_client_credentials_service.check_client_credentials(client_id, client_secret):
             scope = '*/write'
