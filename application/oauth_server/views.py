@@ -18,6 +18,8 @@ from application.irma_client import irma_client
 from application.oauth_server.model import Oauth2Session, Oauth2Token
 from application.oauth_server.service import token_service, oauth2_client_credentials_service
 
+DEFAULT_SCOPE = '*/write'
+
 
 def create_blueprint() -> Blueprint:
     blueprint = Blueprint(__name__.split('.')[-2], __name__)
@@ -126,7 +128,7 @@ def create_blueprint() -> Blueprint:
     def token_refresh_token():
         refresh_token = request.values.get('refresh_token')
 
-        scope = request.values.get('scope')
+        scope = request.values.get('scope', DEFAULT_SCOPE)
         oauth2_token: Oauth2Token = Oauth2Token.query.filter_by(refresh_token=refresh_token).first()
         if oauth2_token is None:
             print(f'Cannot locate Oauth2Token with refresh token {refresh_token}')
@@ -201,7 +203,7 @@ def create_blueprint() -> Blueprint:
         if (not client_id or not client_secret) and 'Authorization' in request.headers:
             client_id, client_secret = decode(request.headers['Authorization'])
         if oauth2_client_credentials_service.check_client_credentials(client_id, client_secret):
-            scope = '*/write'
+            scope = DEFAULT_SCOPE
             oauth2_token = Oauth2Token()
             oauth2_token.client_id = client_id
             oauth2_token.scope = scope
