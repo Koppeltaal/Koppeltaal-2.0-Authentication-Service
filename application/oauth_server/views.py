@@ -132,15 +132,17 @@ def create_blueprint() -> Blueprint:
         oauth2_token: Oauth2Token = Oauth2Token.query.filter_by(refresh_token=refresh_token).first()
         if oauth2_token is None:
             print(f'Cannot locate Oauth2Token with refresh token {refresh_token}')
-            return 'Bad Request', 400
+            return 'Bad Request, invalid token', 400
 
         oauth2_session = None
         if oauth2_token.session_id:
             oauth2_session = Oauth2Session.query.filter_by(id=oauth2_token.session_id).first()
             if oauth2_session is None:
-                return 'Bad Request', 400
+                return 'Bad Request, invalid session', 400
 
-        assert scope == oauth2_token.scope
+        if not scope == oauth2_token.scope:
+            return 'Bad Request, invalid scope', 400
+
         oauth2_token.id_token = token_service.get_id_token(oauth2_token)
         oauth2_token.access_token = token_service.get_access_token(oauth2_token, scope)
         if oauth2_token.refresh_token is None:
@@ -200,10 +202,10 @@ def create_blueprint() -> Blueprint:
     def token_client_credentials():
         client_id = request.form.get('client_id')
         client_secret = request.form.get('client_secret')
+        scope = request.form.get('scope', DEFAULT_SCOPE)
         if (not client_id or not client_secret) and 'Authorization' in request.headers:
             client_id, client_secret = decode(request.headers['Authorization'])
         if oauth2_client_credentials_service.check_client_credentials(client_id, client_secret):
-            scope = DEFAULT_SCOPE
             oauth2_token = Oauth2Token()
             oauth2_token.client_id = client_id
             oauth2_token.scope = scope
