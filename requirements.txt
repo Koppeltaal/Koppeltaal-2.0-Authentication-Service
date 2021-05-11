@@ -6,3 +6,4 @@ Authlib==0.15.3
 requests==2.25.1
 flask_behind_proxy==0.1.1
 basicauth==0.4.1
+mysqlclient==2.0.3
