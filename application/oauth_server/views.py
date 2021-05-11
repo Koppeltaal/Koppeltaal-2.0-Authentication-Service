@@ -20,7 +20,6 @@ from application.oauth_server.service import token_service, oauth2_client_creden
 
 DEFAULT_SCOPE = '*/write'
 
-
 def create_blueprint() -> Blueprint:
     blueprint = Blueprint(__name__.split('.')[-2], __name__)
 
@@ -141,6 +140,7 @@ def create_blueprint() -> Blueprint:
                 return 'Bad Request, invalid session', 400
 
         if not scope == oauth2_token.scope:
+            print(f'Invalid scope {scope}, expecting {oauth2_token.scope}.')
             return 'Bad Request, invalid scope', 400
 
         oauth2_token.id_token = token_service.get_id_token(oauth2_token)
