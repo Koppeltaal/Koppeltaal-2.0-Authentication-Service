@@ -23,6 +23,11 @@ DEFAULT_SCOPE = '*/write'
 def create_blueprint() -> Blueprint:
     blueprint = Blueprint(__name__.split('.')[-2], __name__)
 
+    @blueprint.errorhandler(AssertionError)
+    def handle_assertionerror(e):
+        print(f'Catching assertion error {e}, returning 400')
+        return 'Bad Request, assertion failed', 400
+
     @blueprint.route('/oauth2/authorize')
     def authorize():
         oauth_session = Oauth2Session()
