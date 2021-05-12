@@ -53,8 +53,6 @@ def create_app(config=None) -> Flask:
         # load the test config if passed in
         app.config.from_mapping(config)
 
-    # if 'APP_SECRET_KEY' in app.config:
-    #     app.secret_key = app.config['APP_SECRET_KEY']
     register_blueprints(app)
     register_error_handlers(app)
     setup_database(app)
