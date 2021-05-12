@@ -40,9 +40,9 @@ class Oauth2ClientCredentials(db.Model):
 class Oauth2Token(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     client_id = db.Column(db.String(80))
-    access_token = db.Column(db.String(256))
-    refresh_token = db.Column(db.String(256))
-    id_token = db.Column(db.String(256))
+    access_token = db.Column(db.String(2048))
+    refresh_token = db.Column(db.String(2048))
+    id_token = db.Column(db.String(2048))
     scope = db.Column(db.String(128))
     subject = db.Column(db.String(128))
     email = db.Column(db.String(128))
