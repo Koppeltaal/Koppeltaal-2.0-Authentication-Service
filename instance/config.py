@@ -38,6 +38,15 @@ def envget_bool(key, dflt: bool = False) -> bool:
     val = envget_str(key, 'True' if dflt else 'False')
     return val.lower() in ['true', 'yes', '1', 'y']
 
+def envget_list(key: str, dflt: list = '') -> list:
+    """
+    Gets a value from the os.environ, and defaults to the value of dflt if not set in the environment.
+    :param key: environment variable name
+    :param dflt: default value, if not present in the environment
+    :return: either the value of the environment variable or the default value (dflt)
+    """
+    return list(os.environ[key]) if key in os.environ else dflt
+
 
 DEBUG = envget_bool('DEBUG', False)
 
@@ -53,3 +62,12 @@ SQLALCHEMY_TRACK_MODIFICATIONS = envget_bool('SQLALCHEMY_TRACK_MODIFICATIONS', F
 OIDC_JWT_PUBLIC_KEY = envget_str('OIDC_JWT_PUBLIC_KEY', '')
 OIDC_JWT_PRIVATE_KEY = envget_str('OIDC_JWT_PRIVATE_KEY', '')
 OIDC_JWT_EXP_TIME_ACCESS_TOKEN = envget_int('OIDC_JWT_EXP_TIME_ACCESS_TOKEN', 60)
+
+# https://hl7.org/fhir/uv/bulkdata/authorization/index.html#advertising-server-conformance-with-smart-backend-services
+OIDC_SMART_CONFIG_ENABLED = envget_bool('OIDC_SMART_CONFIG_ENABLED', False)
+OIDC_SMART_CONFIG_TOKEN_ENDPOINT = envget_str('OIDC_SMART_CONFIG_TOKEN_ENDPOINT', FHIR_CLIENT_SERVERURL + '/oauth2/token')
+OIDC_SMART_CONFIG_REGISTRATION_ENDPOINT = envget_str('OIDC_SMART_CONFIG_REGISTRATION_ENDPOINT', 'https://smart-backend-services.koppeltaal.headease.nl/register')
+OIDC_SMART_CONFIG_AUTH_METHODS = envget_list('OIDC_SMART_CONFIG_AUTH_METHODS', ["private_key_jwt"])
+OIDC_SMART_CONFIG_SIGNING_ALGS = envget_list('OIDC_SMART_CONFIG_SIGNING_ALGS', ["RS384", "ES384"])
+OIDC_SMART_CONFIG_SCOPES = envget_str('OIDC_SMART_CONFIG_SCOPES', '')
+

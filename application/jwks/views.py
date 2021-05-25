@@ -5,7 +5,7 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 from authlib.jose import JsonWebKey, KeySet, Key
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, abort
 
 
 def create_blueprint() -> Blueprint:
@@ -17,5 +17,18 @@ def create_blueprint() -> Blueprint:
         key_set: KeySet = KeySet([key])
 
         return jsonify(key_set.as_dict())
+
+    @blueprint.route('/.well-known/smart-configuration', methods=['GET'])
+    def smart_configuration():
+
+        if(not current_app.config['OIDC_SMART_CONFIG_ENABLED']):
+            abort(404)
+
+        return jsonify(
+            token_endpoint=(current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']),
+            token_endpoint_auth_methods_supported=(current_app.config['OIDC_SMART_CONFIG_AUTH_METHODS']),
+            token_endpoint_auth_signing_alg_values_supported=(current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS']),
+            scopes_supported=(current_app.config['OIDC_SMART_CONFIG_SCOPES']),
+            registration_endpoint=(current_app.config['OIDC_SMART_CONFIG_REGISTRATION_ENDPOINT']));
 
     return blueprint
