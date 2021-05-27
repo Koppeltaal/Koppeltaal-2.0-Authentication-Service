@@ -5,8 +5,11 @@ from authlib.jose import Key, JsonWebKey
 from authlib.jose import jwt
 from flask import request, current_app
 
+import jwt as pyjwt
+from jwt import PyJWKClient
+
 from application.database import db
-from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials
+from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials, SmartService, SmartServiceStatus
 
 
 class TokenService:
@@ -63,6 +66,37 @@ class TokenService:
 
 
 class Oauth2ClientCredentialsService:
+    def verify_and_get_token(self):
+        encoded_token = request.form.get('client_assertion')
+
+        unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
+
+        if not smart_service or smart_service.status != SmartServiceStatus.APPROVED:
+            return
+
+        #TODO: Validate & consume JTI to prevent replaying JWT
+
+        jwks_client = PyJWKClient(smart_service.jwks_endpoint)
+        signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
+        return pyjwt.decode(
+            encoded_token,
+            signing_key.key,
+            algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
+            audience=current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'],
+            options={"verify_exp": False},
+        )
+
+    def get_smart_service(self, unverified_decoded_jwt):
+        issuer = unverified_decoded_jwt['iss']
+        subject = unverified_decoded_jwt['sub'] # cannot be client_id
+        client_assertion_type = request.form.get('client_assertion_type')
+
+        if issuer != subject or client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer":
+            return
+
+        return SmartService.query.filter_by(client_id=issuer).first()
+
     def check_client_credentials(self, client_id: str, client_secret: str):
         credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
         if credentials:

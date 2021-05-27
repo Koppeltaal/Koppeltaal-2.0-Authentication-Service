@@ -204,21 +204,21 @@ def create_blueprint() -> Blueprint:
         db.session.commit()
         return jsonify(oauth2_token_to_json(oauth2_token, oauth2_session))
 
+    # private_key_jwt flow https://hl7.org/fhir/uv/bulkdata/authorization/index.html#obtaining-an-access-token
     def token_client_credentials():
-        client_id = request.form.get('client_id')
-        client_secret = request.form.get('client_secret')
-        scope = request.form.get('scope', DEFAULT_SCOPE)
-        if (not client_id or not client_secret) and 'Authorization' in request.headers:
-            client_id, client_secret = decode(request.headers['Authorization'])
-        if oauth2_client_credentials_service.check_client_credentials(client_id, client_secret):
+
+        jwt = oauth2_client_credentials_service.verify_and_get_token()
+
+        if jwt:
             oauth2_token = Oauth2Token()
-            oauth2_token.client_id = client_id
-            oauth2_token.scope = scope
-            oauth2_token.access_token = token_service.get_access_token(oauth2_token, scope)
+            oauth2_token.client_id = jwt['iss']
+            oauth2_token.scope = request.form.get('scope') #TODO: Verify is scope is allowed?
+            oauth2_token.access_token = token_service.get_access_token(oauth2_token, request.form.get('scope'))
             oauth2_token.refresh_token = token_service.get_refresh_token()
             db.session.add(oauth2_token)
             db.session.commit()
             return jsonify(oauth2_token_to_json(oauth2_token))
+
         return 'Access Denied', 401
 
     def _update_fhir_user(oauth_session, username):
