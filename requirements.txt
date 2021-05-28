@@ -7,4 +7,4 @@ requests==2.25.1
 flask_behind_proxy==0.1.1
 basicauth==0.4.1
 pymysql==1.0.2
-PyJWT=2.1.0
+PyJWT==2.1.0
