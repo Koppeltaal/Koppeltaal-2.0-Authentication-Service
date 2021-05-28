@@ -108,7 +108,7 @@ class Oauth2ClientCredentialsService:
 
         if issuer != subject or client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer":
             logger.warning(
-                'Invalid JWT - issuer != subject = [%s] and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" = [%s]',
+                'Invalid JWT - issuer != subject == [%s] and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" == [%s]',
                 issuer != subject,
                 client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
             )
