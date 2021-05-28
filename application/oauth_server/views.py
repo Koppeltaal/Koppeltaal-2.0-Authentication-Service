@@ -8,7 +8,7 @@ from encodings.base64_codec import base64_decode
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
-from basicauth import decode
+import logging
 
 from flask import Blueprint, redirect, request, jsonify, current_app, render_template, session
 
@@ -19,6 +19,9 @@ from application.oauth_server.model import Oauth2Session, Oauth2Token
 from application.oauth_server.service import token_service, oauth2_client_credentials_service
 
 DEFAULT_SCOPE = '*/write'
+logger = logging.getLogger('oauth_views')
+logger.setLevel(logging.DEBUG)
+
 
 def create_blueprint() -> Blueprint:
     blueprint = Blueprint(__name__.split('.')[-2], __name__)
@@ -210,6 +213,7 @@ def create_blueprint() -> Blueprint:
         jwt = oauth2_client_credentials_service.verify_and_get_token()
 
         if jwt:
+            logger.info("Generating OAuth access token for issuer [%s]", jwt['iss'])
             oauth2_token = Oauth2Token()
             oauth2_token.client_id = jwt['iss']
             oauth2_token.scope = request.form.get('scope') #TODO: Verify is scope is allowed?
@@ -219,6 +223,7 @@ def create_blueprint() -> Blueprint:
             db.session.commit()
             return jsonify(oauth2_token_to_json(oauth2_token))
 
+        logger.info("Invalid client credential request from client_id [%s] - returning access denied", jwt['iss'])
         return 'Access Denied', 401
 
     def _update_fhir_user(oauth_session, username):

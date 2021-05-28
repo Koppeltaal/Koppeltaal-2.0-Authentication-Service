@@ -8,8 +8,14 @@ from flask import request, current_app
 import jwt as pyjwt
 from jwt import PyJWKClient
 
+import logging
+
 from application.database import db
-from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials, SmartService, SmartServiceStatus
+from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials, \
+    SmartService, SmartServiceStatus
+
+logger = logging.getLogger('oauth_service')
+logger.setLevel(logging.DEBUG)
 
 
 class TokenService:
@@ -70,32 +76,49 @@ class Oauth2ClientCredentialsService:
         encoded_token = request.form.get('client_assertion')
 
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        client_id = unverified_decoded_jwt['iss']
+
+        logger.debug('Verifying received token: [%s]', unverified_decoded_jwt)
+
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 
         if not smart_service or smart_service.status != SmartServiceStatus.APPROVED:
+            logger.warning("Discontinuing request for client_id [%], smart service not found or status not approved", client_id)
             return
 
-        #TODO: Validate & consume JTI to prevent replaying JWT
+        # TODO: Validate & consume JTI to prevent replaying JWT
+        logger.warning('Not validating the JTI - this should be implemented before use in production')
 
         jwks_client = PyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
-        return pyjwt.decode(
-            encoded_token,
-            signing_key.key,
-            algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
-            audience=current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'],
-            options={"verify_exp": False},
-        )
+
+        decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
+                                   algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
+                                   audience=current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'],
+                                   options={"verify_exp": False}
+                                   )
+        logger.info('JWT for client_id [%s] is decoded - valid key', client_id)
+
+        return decoded_jwt
 
     def get_smart_service(self, unverified_decoded_jwt):
         issuer = unverified_decoded_jwt['iss']
-        subject = unverified_decoded_jwt['sub'] # cannot be client_id
+        subject = unverified_decoded_jwt['sub']  # cannot be client_id
         client_assertion_type = request.form.get('client_assertion_type')
 
         if issuer != subject or client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer":
+            logger.warning(
+                'Invalid JWT - issuer != subject = [%s] and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" = []',
+                issuer != subject,
+                client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            )
+
             return
 
-        return SmartService.query.filter_by(client_id=issuer).first()
+        smart_service = SmartService.query.filter_by(client_id=issuer).first()
+        logger.info('Matched issuer [%s] to smart service [%s]', issuer, smart_service)
+
+        return smart_service
 
     def check_client_credentials(self, client_id: str, client_secret: str):
         credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
