@@ -72,6 +72,7 @@ class TokenService:
 
 
 class Oauth2ClientCredentialsService:
+    consumed_jti_tokens = []
     def verify_and_get_token(self):
         encoded_token = request.form.get('client_assertion')
 
@@ -86,8 +87,16 @@ class Oauth2ClientCredentialsService:
             logger.warning("Discontinuing request for client_id [%s], smart service not found or status not approved", client_id)
             return
 
-        # TODO: Validate & consume JTI to prevent replaying JWT
-        logger.warning('Not validating the JTI - this should be implemented before use in production')
+        if not unverified_decoded_jwt['jti']:
+            logger.warning("JWT doesn't contain a jti value")
+            return
+
+        #FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
+        if unverified_decoded_jwt['jti'] in self.consumed_jti_tokens:
+            logger.warning("JWT is being replayed - jti [%s] is already consumed", unverified_decoded_jwt['jti'])
+            return
+
+        self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
 
         jwks_client = PyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
