@@ -103,7 +103,7 @@ class Oauth2ClientCredentialsService:
 
     def get_smart_service(self, unverified_decoded_jwt):
         issuer = unverified_decoded_jwt['iss']
-        subject = unverified_decoded_jwt['sub']  # cannot be client_id
+        subject = unverified_decoded_jwt['sub']
         client_assertion_type = request.form.get('client_assertion_type')
 
         if issuer != subject or client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer":
