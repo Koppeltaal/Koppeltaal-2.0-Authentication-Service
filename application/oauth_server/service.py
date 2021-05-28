@@ -103,9 +103,7 @@ class Oauth2ClientCredentialsService:
 
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                                   audience=current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'],
-                                   options={"verify_exp": False}
-                                   )
+                                   audience=current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
         logger.info('JWT for client_id [%s] is decoded - valid key', client_id)
 
         return decoded_jwt
