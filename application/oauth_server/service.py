@@ -83,7 +83,7 @@ class Oauth2ClientCredentialsService:
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 
         if not smart_service or smart_service.status != SmartServiceStatus.APPROVED:
-            logger.warning("Discontinuing request for client_id [%], smart service not found or status not approved", client_id)
+            logger.warning("Discontinuing request for client_id [%s], smart service not found or status not approved", client_id)
             return
 
         # TODO: Validate & consume JTI to prevent replaying JWT

@@ -223,7 +223,7 @@ def create_blueprint() -> Blueprint:
             db.session.commit()
             return jsonify(oauth2_token_to_json(oauth2_token))
 
-        logger.info("Invalid client credential request from client_id [%s] - returning access denied", jwt['iss'])
+        logger.info("Invalid client credential request - returning access denied")
         return 'Access Denied', 401
 
     def _update_fhir_user(oauth_session, username):
