@@ -32,11 +32,6 @@ class Oauth2Session(db.Model):
         return f'<Oauth2Session {self.id}>'
 
 
-class Oauth2ClientCredentials(db.Model):
-    id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
-    client_id = db.Column(db.String(80))
-    client_secret = db.Column(db.String(80))
-
 class Oauth2Token(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     client_id = db.Column(db.String(80))

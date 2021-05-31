@@ -11,8 +11,7 @@ from jwt import PyJWKClient
 import logging
 
 from application.database import db
-from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials, \
-    SmartService, SmartServiceStatus
+from application.oauth_server.model import Oauth2Token, SmartService, SmartServiceStatus
 
 logger = logging.getLogger('oauth_service')
 logger.setLevel(logging.DEBUG)
@@ -126,22 +125,6 @@ class Oauth2ClientCredentialsService:
         logger.info('Matched issuer [%s] to smart service [%s]', issuer, smart_service)
 
         return smart_service
-
-    def check_client_credentials(self, client_id: str, client_secret: str):
-        credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
-        if credentials:
-            return client_secret == credentials.client_secret
-        return False
-
-    def store_client_credentials(self, client_id: str, client_secret: str):
-        credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
-        if not credentials:
-            credentials = Oauth2ClientCredentials()
-            credentials.client_id = client_id
-
-        credentials.client_secret = client_secret
-        db.session.add(credentials)
-        db.session.commit()
 
 
 token_service = TokenService()

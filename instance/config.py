@@ -55,7 +55,6 @@ SESSION_TYPE = envget_str('APP_SESSION_TYPE', 'filesystem')
 IRMA_CLIENT_SERVER_URL = envget_str('IRMA_CLIENT_SERVER_URL', "https://irma-auth.sns.gidsopenstandaarden.org/")
 
 FHIR_CLIENT_SERVERURL = envget_str('FHIR_CLIENT_SERVERURL', "http://localhost:8080/fhir")
-MODULE_CLIENT_CREDENTIALS = envget_str('MODULE_CLIENT_CREDENTIALS', "")
 
 SQLALCHEMY_DATABASE_URI = envget_str('SQLALCHEMY_DATABASE_URI', "sqlite:////tmp/koppeltaal-irma-idp.db")
 SQLALCHEMY_TRACK_MODIFICATIONS = envget_bool('SQLALCHEMY_TRACK_MODIFICATIONS', False)
