@@ -6,7 +6,7 @@ from authlib.jose import jwt
 from flask import request, current_app
 
 import jwt as pyjwt
-from jwt import PyJWKClient
+from jwt import PyJWKClient, InvalidSignatureError
 
 import logging
 
@@ -96,12 +96,20 @@ class Oauth2ClientCredentialsService:
 
         self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
 
-        if smart_service.jwks_endpoint:
-            return self.decode_with_jwks(smart_service, encoded_token)
-        elif smart_service.public_key:
-            return self.decode_with_public_key(smart_service, encoded_token)
-        else:
-            logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
+        try:
+            if smart_service.jwks_endpoint:
+                return self.decode_with_jwks(smart_service, encoded_token)
+            elif smart_service.public_key:
+                return self.decode_with_public_key(smart_service, encoded_token)
+            else:
+                logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
+        except InvalidSignatureError:
+            logger.warning("Invalid signature for client_id [%s]", client_id)
+            return
+        except:
+            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s]", client_id)
+            return
+
 
     def decode_with_jwks(self, smart_service, encoded_token):
 
