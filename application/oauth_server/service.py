@@ -10,7 +10,6 @@ from jwt import PyJWKClient
 
 import logging
 
-from application.database import db
 from application.oauth_server.model import Oauth2Token, SmartService, SmartServiceStatus
 
 logger = logging.getLogger('oauth_service')
@@ -100,7 +99,7 @@ class Oauth2ClientCredentialsService:
         if smart_service.jwks_endpoint:
             return self.decode_with_jwks(smart_service, encoded_token)
         elif smart_service.public_key:
-            return  self.decode_with_public_key(smart_service, encoded_token)
+            return self.decode_with_public_key(smart_service, encoded_token)
         else:
             logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
 
@@ -114,11 +113,24 @@ class Oauth2ClientCredentialsService:
                                    audience=current_app.config[
                                        'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
 
-        logger.info('JWT for client_id [%s] is decoded - valid key', smart_service.client_id)
+        logger.info('JWT for client_id [%s] is decoded by JWKS - valid key', smart_service.client_id)
         return decoded_jwt
 
     def decode_with_public_key(self, smart_service, encoded_token):
-        return pyjwt.decode(encoded_token, smart_service.public_key, algorithms=["RS512"])
+
+        public_key = smart_service.public_key
+
+        if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
+            logger.debug("public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags")
+            public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
+
+        decoded_jwt = pyjwt.decode(encoded_token, public_key,
+                                   algorithms=["RS512"],
+                                   audience=current_app.config[
+                                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
+
+        logger.info('JWT for client_id [%s] is decoded by PUBLIC KEY - valid key', smart_service.client_id)
+        return decoded_jwt
 
     def get_smart_service(self, unverified_decoded_jwt):
         issuer = unverified_decoded_jwt['iss']
