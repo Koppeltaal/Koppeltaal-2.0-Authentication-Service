@@ -97,15 +97,28 @@ class Oauth2ClientCredentialsService:
 
         self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
 
+        if smart_service.jwks_endpoint:
+            return self.decode_with_jwks(smart_service, encoded_token)
+        elif smart_service.public_key:
+            return  self.decode_with_public_key(smart_service, encoded_token)
+        else:
+            logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
+
+    def decode_with_jwks(self, smart_service, encoded_token):
+
         jwks_client = PyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
-
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
-                                   algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                                   audience=current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
-        logger.info('JWT for client_id [%s] is decoded - valid key', client_id)
+                                   algorithms=current_app.config[
+                                       'OIDC_SMART_CONFIG_SIGNING_ALGS'],
+                                   audience=current_app.config[
+                                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
 
+        logger.info('JWT for client_id [%s] is decoded - valid key', smart_service.client_id)
         return decoded_jwt
+
+    def decode_with_public_key(self, smart_service, encoded_token):
+        return pyjwt.decode(encoded_token, smart_service.public_key, algorithms=["RS512"])
 
     def get_smart_service(self, unverified_decoded_jwt):
         issuer = unverified_decoded_jwt['iss']

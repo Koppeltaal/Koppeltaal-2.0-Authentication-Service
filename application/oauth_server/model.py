@@ -59,6 +59,7 @@ class SmartService(db.Model):
     client_id = db.Column(db.String(255))
     jwks_endpoint = db.Column(db.String(255))
     status = db.Column(db.String(255))
+    public_key = db.Column(db.String(255))
 
 
 class SmartServiceStatus(str, Enum):
