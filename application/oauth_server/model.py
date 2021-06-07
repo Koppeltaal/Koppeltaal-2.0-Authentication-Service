@@ -3,7 +3,7 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+from enum import Enum
 from uuid import uuid4
 
 from application.database import db
@@ -32,11 +32,6 @@ class Oauth2Session(db.Model):
         return f'<Oauth2Session {self.id}>'
 
 
-class Oauth2ClientCredentials(db.Model):
-    id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
-    client_id = db.Column(db.String(80))
-    client_secret = db.Column(db.String(80))
-
 class Oauth2Token(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     client_id = db.Column(db.String(80))
@@ -56,3 +51,18 @@ class Oauth2Token(db.Model):
                 'refresh_token': self.refresh_token,
                 'scope': self.scope,
                 'subject': self.subject}
+
+
+class SmartService(db.Model):
+    id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
+    created_by = db.Column(db.String(255))
+    client_id = db.Column(db.String(255))
+    jwks_endpoint = db.Column(db.String(255))
+    status = db.Column(db.String(255))
+    public_key = db.Column(db.String(255))
+
+
+class SmartServiceStatus(str, Enum):
+    PENDING = 'PENDING'
+    APPROVED = 'APPROVED'
+    REJECTED = 'REJECTED'

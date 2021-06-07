@@ -5,8 +5,15 @@ from authlib.jose import Key, JsonWebKey
 from authlib.jose import jwt
 from flask import request, current_app
 
-from application.database import db
-from application.oauth_server.model import Oauth2Token, Oauth2ClientCredentials
+import jwt as pyjwt
+from jwt import PyJWKClient, InvalidSignatureError
+
+import logging
+
+from application.oauth_server.model import Oauth2Token, SmartService, SmartServiceStatus
+
+logger = logging.getLogger('oauth_service')
+logger.setLevel(logging.DEBUG)
 
 
 class TokenService:
@@ -63,21 +70,94 @@ class TokenService:
 
 
 class Oauth2ClientCredentialsService:
-    def check_client_credentials(self, client_id: str, client_secret: str):
-        credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
-        if credentials:
-            return client_secret == credentials.client_secret
-        return False
+    consumed_jti_tokens = []
+    def verify_and_get_token(self):
+        encoded_token = request.form.get('client_assertion')
 
-    def store_client_credentials(self, client_id: str, client_secret: str):
-        credentials: Oauth2ClientCredentials = Oauth2ClientCredentials.query.filter_by(client_id=client_id).first()
-        if not credentials:
-            credentials = Oauth2ClientCredentials()
-            credentials.client_id = client_id
+        unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        client_id = unverified_decoded_jwt['iss']
 
-        credentials.client_secret = client_secret
-        db.session.add(credentials)
-        db.session.commit()
+        logger.debug('Verifying received token: [%s]', unverified_decoded_jwt)
+
+        smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
+
+        if not smart_service or smart_service.status != SmartServiceStatus.APPROVED:
+            logger.warning("Discontinuing request for client_id [%s], smart service not found or status not approved", client_id)
+            return
+
+        if not unverified_decoded_jwt['jti']:
+            logger.warning("JWT doesn't contain a jti value")
+            return
+
+        #FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
+        if unverified_decoded_jwt['jti'] in self.consumed_jti_tokens:
+            logger.warning("JWT is being replayed - jti [%s] is already consumed", unverified_decoded_jwt['jti'])
+            return
+
+        self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
+
+        try:
+            if smart_service.jwks_endpoint:
+                return self.decode_with_jwks(smart_service, encoded_token)
+            elif smart_service.public_key:
+                return self.decode_with_public_key(smart_service, encoded_token)
+            else:
+                logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
+        except InvalidSignatureError:
+            logger.warning("Invalid signature for client_id [%s]", client_id)
+            return
+        except:
+            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s]", client_id)
+            return
+
+
+    def decode_with_jwks(self, smart_service, encoded_token):
+
+        jwks_client = PyJWKClient(smart_service.jwks_endpoint)
+        signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
+        decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
+                                   algorithms=current_app.config[
+                                       'OIDC_SMART_CONFIG_SIGNING_ALGS'],
+                                   audience=current_app.config[
+                                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
+
+        logger.info('JWT for client_id [%s] is decoded by JWKS - valid key', smart_service.client_id)
+        return decoded_jwt
+
+    def decode_with_public_key(self, smart_service, encoded_token):
+
+        public_key = smart_service.public_key
+
+        if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
+            logger.debug("public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags")
+            public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
+
+        decoded_jwt = pyjwt.decode(encoded_token, public_key,
+                                   algorithms=["RS512"],
+                                   audience=current_app.config[
+                                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
+
+        logger.info('JWT for client_id [%s] is decoded by PUBLIC KEY - valid key', smart_service.client_id)
+        return decoded_jwt
+
+    def get_smart_service(self, unverified_decoded_jwt):
+        issuer = unverified_decoded_jwt['iss']
+        subject = unverified_decoded_jwt['sub']
+        client_assertion_type = request.form.get('client_assertion_type')
+
+        if issuer != subject or client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer":
+            logger.warning(
+                'Invalid JWT - issuer != subject == [%s] and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" == [%s]',
+                issuer != subject,
+                client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            )
+
+            return
+
+        smart_service = SmartService.query.filter_by(client_id=issuer).first()
+        logger.info('Matched issuer [%s] to smart service [%s]', issuer, smart_service)
+
+        return smart_service
 
 
 token_service = TokenService()

@@ -70,11 +70,3 @@ def setup_database(app: Flask):
     db.init_app(app)
     with app.app_context():
         db.create_all()
-
-    with app.app_context():
-        client_credentials:str = app.config['MODULE_CLIENT_CREDENTIALS']
-        for client_credential in client_credentials.split(','):
-            client_credential = client_credential.strip()
-            if ':' in client_credential:
-                key, secret = client_credential.split(':', 1)
-                oauth2_client_credentials_service.store_client_credentials(key, secret)
