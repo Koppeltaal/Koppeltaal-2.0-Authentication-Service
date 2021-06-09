@@ -103,11 +103,11 @@ class Oauth2ClientCredentialsService:
                 return self.decode_with_public_key(smart_service, encoded_token)
             else:
                 logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
-        except InvalidSignatureError:
-            logger.warning("Invalid signature for client_id [%s]", client_id)
+        except InvalidSignatureError as ise:
+            logger.warning("Invalid signature for client_id [%s], exception [%s]", client_id, ise)
             return
-        except:
-            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s]", client_id)
+        except Exception as e:
+            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s], exception [%s]", client_id, e)
             return
 
 
