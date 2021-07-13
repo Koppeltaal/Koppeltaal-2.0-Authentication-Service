@@ -129,7 +129,7 @@ class Oauth2ClientCredentialsService:
         public_key = smart_service.public_key
 
         if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
-            logger.debug("public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags")
+            logger.debug("public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags", smart_service.client_id)
             public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
 
         decoded_jwt = pyjwt.decode(encoded_token, public_key,
