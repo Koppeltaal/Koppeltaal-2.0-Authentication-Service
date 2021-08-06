@@ -20,11 +20,12 @@ class TokenService:
     def get_id_token(self, oauth2_token: Oauth2Token) -> str:
         return self._get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'], oauth2_token.client_id,
                                    sub=oauth2_token.subject, email=oauth2_token.email,
-                                   given_name=oauth2_token.name_given, family_name=oauth2_token.name_family)
+                                   given_name=oauth2_token.name_given, family_name=oauth2_token.name_family,
+                                   azp=oauth2_token.client_id)
 
     def get_access_token(self, oauth2_token: Oauth2Token, scope: str) -> str:
         return self._get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'], 'fhir-server', type='access',
-                                   sub=oauth2_token.subject, scope=scope)
+                                   sub=oauth2_token.subject, scope=scope, azp=oauth2_token.client_id)
 
     def get_system_access_token(self, username: str) -> str:
         return self._get_jwt_token(120, 'fhir-server', 'access', username, None,
@@ -34,7 +35,7 @@ class TokenService:
         return str(uuid4())
 
     def _get_jwt_token(self, expiry: int, aud: str, type: str = None, sub: str = None, email: str = None,
-                       given_name: str = None, family_name: str = None, scope: str = None) -> str:
+                       given_name: str = None, family_name: str = None, scope: str = None, azp: str =  None) -> str:
         private_key, public_key = self.get_keypair()
         payload = {
             'iss': request.url_root,
@@ -59,6 +60,9 @@ class TokenService:
 
         if scope is not None:
             payload['scope'] = scope
+
+        if azp is not None:
+            payload['azp'] = azp
 
         header = {'kid': public_key.thumbprint(), 'alg': 'RS512'}
         return jwt.encode(header, payload, private_key).decode('ascii')
