@@ -4,11 +4,11 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
+import logging
 from encodings.base64_codec import base64_decode
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
-import logging
 
 from flask import Blueprint, redirect, request, jsonify, current_app, render_template, session
 
@@ -16,7 +16,7 @@ from application.database import db
 from application.fhir_client import fhir_client
 from application.irma_client import irma_client
 from application.oauth_server.model import Oauth2Session, Oauth2Token
-from application.oauth_server.service import token_service, oauth2_client_credentials_service
+from application.oauth_server.service import token_service, oauth2_client_credentials_service, smart_hti_on_fhir_service
 
 DEFAULT_SCOPE = '*/write'
 logger = logging.getLogger('oauth_views')
@@ -35,12 +35,14 @@ def create_blueprint() -> Blueprint:
     def authorize():
         oauth_session = Oauth2Session()
 
+        oauth_session.type = _get_session_type()
         oauth_session.scope = request.values.get('scope')
         oauth_session.response_type = request.values.get('response_type')
         oauth_session.client_id = request.values.get('client_id')
         oauth_session.redirect_uri = request.values.get('redirect_uri')
         oauth_session.state = request.values.get('state')
         oauth_session.launch = request.values.get('launch', None)
+        oauth_session.aud = request.values.get('aud', None)
         oauth_session.code = str(uuid4())
 
         if 'username' in session:  # Fixme:
@@ -51,6 +53,12 @@ def create_blueprint() -> Blueprint:
         db.session.commit()
 
         return route_from_authorise(oauth_session)
+
+    def _get_session_type():
+        aud = request.values.get('aud', None)
+        launch = request.values.get('launch', None)
+        type = 'smart_backend' if aud is None and launch is None else 'smart_hti_on_fhir'
+        return type
 
     @blueprint.route('/oauth2/restart')
     def restart():
@@ -123,6 +131,14 @@ def create_blueprint() -> Blueprint:
                 f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
 
     def route_from_authorise(oauth_session):
+        # This is a SMART HTI on FHIR launch
+        if oauth_session.type == 'smart_hti_on_fhir':
+            assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth_session.aud
+            if smart_hti_on_fhir_service.validate_launch_token(oauth_session.launch):
+                return redirect(
+                    f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
+            else:
+                return 'Bad Request, invalid launch token', 400
         # If the username is set, the user is identified.
         if oauth_session.username is None:
             return redirect(irma_client.get_redirect_url({'session': oauth_session.id}))
@@ -156,11 +172,11 @@ def create_blueprint() -> Blueprint:
         if oauth2_token.refresh_token is None:
             oauth2_token.refresh_token = token_service.get_refresh_token()
         db.session.add(oauth2_token)
-        json = oauth2_token_to_json(oauth2_token, oauth2_session)
+        json = oauth2_token_task_to_json(oauth2_token, oauth2_session)
         db.session.commit()
         return jsonify(json)
 
-    def oauth2_token_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session = None):
+    def oauth2_token_task_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session = None):
         rv = {'access_token': oauth2_token.access_token,
               "token_type": "Bearer",
               "refresh_token": oauth2_token.refresh_token,
@@ -169,20 +185,21 @@ def create_blueprint() -> Blueprint:
         if oauth2_token.id_token:
             rv['id_token'] = oauth2_token.id_token
 
-        if oauth2_session and oauth2_session.launch and oauth2_session.launch.count('.') == 2:
-            try:
-                body_encoded = oauth2_session.launch.split('.')[1]
-                body = json.loads(base64_decode(body_encoded.encode('ascii') + b'===')[0].decode('ascii'))
-                if 'task' in body:
-                    task = body['task']
-                    if 'owner' in task:
-                        rv['patient'] = task['owner']['reference']
-                    if 'definitionReference' in task:
-                        rv['task'] = task['definitionReference']['reference']
-                    if 'requester' in task:
-                        rv['practitioner'] = task['requester']['reference']
-            except JSONDecodeError:
-                print(f'Failed to process token: {oauth2_session.launch}')
+        body = _get_launch_token_body(oauth2_session)
+        if 'sub' in body:
+            subject: str = body['sub']
+            if subject.startswith('Patient/'):
+                rv['patient'] = subject
+            if subject.startswith('Practitioner/'):
+                rv['practitioner'] = subject
+            if subject.startswith('RelatedPerson/'):
+                rv['relatedperson'] = subject
+        if 'task' in body:
+            task = body['task']
+            if 'id' in task:
+                rv['task'] = f'Task/{task["id"]}'
+            if 'instantiatesCanonical' in task:
+                rv['activity'] = task['instantiatesCanonical']  ## TODO: chop whole URL?
 
         return rv
 
@@ -192,6 +209,45 @@ def create_blueprint() -> Blueprint:
         ## TODO: The token request must be autheticated.
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(code=code).first()
         assert redirect_uri == oauth2_session.redirect_uri
+        if oauth2_session.type == 'smart_hti_on_fhir':
+            return _oauth_token_smart_hti_on_fhir(oauth2_session)
+        elif oauth2_session.type == 'smart_backend':
+            return _oauth_token_smart_backend_services(oauth2_session)
+
+    def _oauth_token_smart_hti_on_fhir(oauth2_session):
+        oauth2_token = Oauth2Token()
+        # oauth2_token.email = oauth2_session.email
+        # oauth2_token.name_family = oauth2_session.name_family
+        # oauth2_token.name_given = oauth2_session.name_given
+        # oauth2_token.subject = oauth2_session.user_fhir_reference
+        oauth2_token.client_id = oauth2_session.client_id
+        body = _get_launch_token_body(oauth2_session)
+
+        oauth2_token.subject = body['sub']
+
+        oauth2_token.scope = oauth2_session.scope
+        oauth2_token.client_id = oauth2_session.client_id
+        oauth2_token.id_token = token_service.get_id_token(oauth2_token)
+        ## NOOP:
+        oauth2_token.access_token = 'NOOP'
+        ## NOOP:
+        oauth2_token.refresh_token = 'NOOP'
+        oauth2_token.session_id = oauth2_session.id
+        db.session.add(oauth2_token)
+        db.session.commit()
+        return jsonify(oauth2_token_task_to_json(oauth2_token, oauth2_session))
+
+    def _get_launch_token_body(oauth2_session):
+        body = {}
+        if oauth2_session and oauth2_session.launch and oauth2_session.launch.count('.') == 2:
+            try:
+                body_encoded = oauth2_session.launch.split('.')[1]
+                body = json.loads(base64_decode(body_encoded.encode('ascii') + b'===')[0].decode('ascii'))
+            except JSONDecodeError:
+                print(f'Failed to process token: {oauth2_session.launch}')
+        return body
+
+    def _oauth_token_smart_backend_services(oauth2_session):
         oauth2_token = Oauth2Token()
         oauth2_token.email = oauth2_session.email
         oauth2_token.name_family = oauth2_session.name_family
@@ -205,23 +261,25 @@ def create_blueprint() -> Blueprint:
         oauth2_token.session_id = oauth2_session.id
         db.session.add(oauth2_token)
         db.session.commit()
-        return jsonify(oauth2_token_to_json(oauth2_token, oauth2_session))
+        return jsonify(oauth2_token_task_to_json(oauth2_token, oauth2_session))
 
     # private_key_jwt flow https://hl7.org/fhir/uv/bulkdata/authorization/index.html#obtaining-an-access-token
     def token_client_credentials():
+        client_assertion_type = request.form.get('client_assertion_type')
+        # Check if the client_assertion_type is set correctly.
+        if client_assertion_type == 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer':
+            jwt = oauth2_client_credentials_service.verify_and_get_token()
 
-        jwt = oauth2_client_credentials_service.verify_and_get_token()
-
-        if jwt:
-            logger.info("Generating OAuth access token for issuer [%s]", jwt['iss'])
-            oauth2_token = Oauth2Token()
-            oauth2_token.client_id = jwt['iss']
-            oauth2_token.scope = request.form.get('scope') #TODO: Verify if scope is allowed?
-            oauth2_token.access_token = token_service.get_access_token(oauth2_token, request.form.get('scope'))
-            oauth2_token.refresh_token = token_service.get_refresh_token()
-            db.session.add(oauth2_token)
-            db.session.commit()
-            return jsonify(oauth2_token_to_json(oauth2_token))
+            if jwt:
+                logger.info("Generating OAuth access token for issuer [%s]", jwt['iss'])
+                oauth2_token = Oauth2Token()
+                oauth2_token.client_id = jwt['iss']
+                oauth2_token.scope = request.form.get('scope')  # TODO: Verify if scope is allowed?
+                oauth2_token.access_token = token_service.get_access_token(oauth2_token, request.form.get('scope'))
+                oauth2_token.refresh_token = token_service.get_refresh_token()
+                db.session.add(oauth2_token)
+                db.session.commit()
+                return jsonify(oauth2_token_task_to_json(oauth2_token))
 
         logger.info("Invalid client credential request - returning access denied")
         return 'Access Denied', 401

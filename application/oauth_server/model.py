@@ -13,12 +13,14 @@ from application.oauth_server.guid import GUID
 class Oauth2Session(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
 
+    type = db.Column(db.String(80)) # alter table oauth2_session add column type VARCHAR(80) default 'smart_backend'
     scope = db.Column(db.String(80))
     response_type = db.Column(db.String(16))
     client_id = db.Column(db.String(80))
     redirect_uri = db.Column(db.String(128))
     state = db.Column(db.String(128))
-    launch = db.Column(db.String(512))
+    launch = db.Column(db.Text()) # alter table oauth2_session modify column launch TEXT
+    aud = db.Column(db.String(128)) # alter table oauth2_session add column aud VARCHAR(255)
 
     username = db.Column(db.String(80))
     email = db.Column(db.String(80))

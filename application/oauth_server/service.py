@@ -1,14 +1,12 @@
+import logging
 from time import time
 from uuid import uuid4
 
+import jwt as pyjwt
 from authlib.jose import Key, JsonWebKey
 from authlib.jose import jwt
 from flask import request, current_app
-
-import jwt as pyjwt
 from jwt import PyJWKClient, InvalidSignatureError
-
-import logging
 
 from application.oauth_server.model import Oauth2Token, SmartService, SmartServiceStatus
 
@@ -35,7 +33,7 @@ class TokenService:
         return str(uuid4())
 
     def _get_jwt_token(self, expiry: int, aud: str, type: str = None, sub: str = None, email: str = None,
-                       given_name: str = None, family_name: str = None, scope: str = None, azp: str =  None) -> str:
+                       given_name: str = None, family_name: str = None, scope: str = None, azp: str = None) -> str:
         private_key, public_key = self.get_keypair()
         payload = {
             'iss': request.url_root,
@@ -75,6 +73,7 @@ class TokenService:
 
 class Oauth2ClientCredentialsService:
     consumed_jti_tokens = []
+
     def verify_and_get_token(self):
         encoded_token = request.form.get('client_assertion')
 
@@ -86,14 +85,15 @@ class Oauth2ClientCredentialsService:
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 
         if not smart_service or smart_service.status != SmartServiceStatus.APPROVED:
-            logger.warning("Discontinuing request for client_id [%s], smart service not found or status not approved", client_id)
+            logger.warning("Discontinuing request for client_id [%s], smart service not found or status not approved",
+                           client_id)
             return
 
         if not unverified_decoded_jwt['jti']:
             logger.warning("JWT doesn't contain a jti value")
             return
 
-        #FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
+        # FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
         if unverified_decoded_jwt['jti'] in self.consumed_jti_tokens:
             logger.warning("JWT is being replayed - jti [%s] is already consumed", unverified_decoded_jwt['jti'])
             return
@@ -111,9 +111,9 @@ class Oauth2ClientCredentialsService:
             logger.warning("Invalid signature for client_id [%s], exception [%s]", client_id, ise)
             return
         except Exception as e:
-            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s], exception [%s]", client_id, e)
+            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s], exception [%s]",
+                           client_id, e)
             return
-
 
     def decode_with_jwks(self, smart_service, encoded_token):
 
@@ -133,7 +133,9 @@ class Oauth2ClientCredentialsService:
         public_key = smart_service.public_key
 
         if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
-            logger.debug("public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags", smart_service.client_id)
+            logger.debug(
+                "public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags",
+                smart_service.client_id)
             public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
 
         decoded_jwt = pyjwt.decode(encoded_token, public_key,
@@ -164,5 +166,49 @@ class Oauth2ClientCredentialsService:
         return smart_service
 
 
+class SmartHtiOnFhirService:
+    def __init__(self):
+        self.consumed_jti_tokens = []
+
+    def validate_launch_token(self, encoded_token):
+        unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        issuer = unverified_decoded_jwt['iss']
+
+        if not unverified_decoded_jwt['jti']:
+            logger.warning("JWT doesn't contain a jti value")
+            return
+
+        # FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
+        if unverified_decoded_jwt['jti'] in self.consumed_jti_tokens:
+            logger.warning("JWT is being replayed - jti [%s] is already consumed", unverified_decoded_jwt['jti'])
+            return
+
+        self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
+
+        try:
+            return self.decode_with_jwks(issuer, encoded_token)
+        except InvalidSignatureError as ise:
+            logger.warning("Invalid signature for client_id [%s], exception [%s]", issuer, ise)
+            return False
+        except Exception as e:
+            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s], exception [%s]",
+                           issuer, e)
+            return False
+
+    def decode_with_jwks(self, issuer, encoded_token):
+        jwks_endpoint = f'{issuer}/.well-known/jwks.json'
+        jwks_client = PyJWKClient(jwks_endpoint)
+        signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
+        # TODO, what about the aud?
+        decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
+                                   algorithms=current_app.config[
+                                       'OIDC_SMART_CONFIG_SIGNING_ALGS'],
+                                   options={'verify_aud': False})
+
+        logger.info('JWT for issuer [%s] is decoded by JWKS - valid key', issuer)
+        return decoded_jwt
+
+
+smart_hti_on_fhir_service = SmartHtiOnFhirService()
 token_service = TokenService()
 oauth2_client_credentials_service = Oauth2ClientCredentialsService()
