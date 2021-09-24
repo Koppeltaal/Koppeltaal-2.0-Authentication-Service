@@ -80,7 +80,7 @@ class Oauth2ClientCredentialsService:
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
         client_id = unverified_decoded_jwt['iss']
 
-        logger.debug('Verifying received token: [%s]', unverified_decoded_jwt)
+        logger.debug(f'Verifying received token: {unverified_decoded_jwt}')
 
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 

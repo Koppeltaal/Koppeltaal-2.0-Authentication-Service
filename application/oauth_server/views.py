@@ -29,7 +29,7 @@ def create_blueprint() -> Blueprint:
     @blueprint.errorhandler(AssertionError)
     def handle_assertionerror(e):
         print(f'Catching assertion error {e}, returning 400')
-        return 'Bad Request, assertion failed', 400
+        return f'Bad Request, assertion failed: {e}', 400
 
     @blueprint.route('/oauth2/authorize')
     def authorize():
