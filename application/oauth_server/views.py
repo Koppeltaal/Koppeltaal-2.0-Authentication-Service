@@ -179,11 +179,13 @@ def create_blueprint() -> Blueprint:
     def oauth2_token_task_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session = None):
         rv = {'access_token': oauth2_token.access_token,
               "token_type": "Bearer",
-              "refresh_token": oauth2_token.refresh_token,
               "expires_in": current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN']}
 
         if oauth2_token.id_token:
             rv['id_token'] = oauth2_token.id_token
+
+        if oauth2_token.refresh_token:
+            rv['refresh_token'] = oauth2_token.refresh_token
 
         body = _get_launch_token_body(oauth2_session)
         if 'sub' in body:
@@ -257,7 +259,8 @@ def create_blueprint() -> Blueprint:
         oauth2_token.client_id = oauth2_session.client_id
         oauth2_token.id_token = token_service.get_id_token(oauth2_token)
         oauth2_token.access_token = token_service.get_access_token(oauth2_token, oauth2_session.scope)
-        oauth2_token.refresh_token = token_service.get_refresh_token()
+        # Skip the refresh token, it is not allowed in client_credentials flow.
+        # oauth2_token.refresh_token = token_service.get_refresh_token()
         oauth2_token.session_id = oauth2_session.id
         db.session.add(oauth2_token)
         db.session.commit()
@@ -276,7 +279,8 @@ def create_blueprint() -> Blueprint:
                 oauth2_token.client_id = jwt['iss']
                 oauth2_token.scope = request.form.get('scope')  # TODO: Verify if scope is allowed?
                 oauth2_token.access_token = token_service.get_access_token(oauth2_token, request.form.get('scope'))
-                oauth2_token.refresh_token = token_service.get_refresh_token()
+                # In the client_credentials flow, the refresh_token is not allowed
+                # oauth2_token.refresh_token = token_service.get_refresh_token()
                 db.session.add(oauth2_token)
                 db.session.commit()
                 return jsonify(oauth2_token_task_to_json(oauth2_token))
