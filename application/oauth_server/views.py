@@ -130,11 +130,11 @@ def create_blueprint() -> Blueprint:
             return redirect(
                 f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
 
-    def route_from_authorise(oauth_session):
+    def route_from_authorise(oauth_session:Oauth2Session):
         # This is a SMART HTI on FHIR launch
         if oauth_session.type == 'smart_hti_on_fhir':
             assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth_session.aud
-            if smart_hti_on_fhir_service.validate_launch_token(oauth_session.launch):
+            if smart_hti_on_fhir_service.validate_launch_token(oauth_session.launch, oauth_session.client_id):
                 return redirect(
                     f'{oauth_session.redirect_uri}?{urlencode({"code": oauth_session.code, "state": oauth_session.state})}')
             else:

@@ -170,9 +170,8 @@ class SmartHtiOnFhirService:
     def __init__(self):
         self.consumed_jti_tokens = []
 
-    def validate_launch_token(self, encoded_token):
+    def validate_launch_token(self, encoded_token: str, client_id: str):
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
-        issuer = unverified_decoded_jwt['iss']
 
         if not unverified_decoded_jwt['jti']:
             logger.warning("JWT doesn't contain a jti value")
@@ -185,28 +184,57 @@ class SmartHtiOnFhirService:
 
         self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
 
-        try:
-            return self.decode_with_jwks(issuer, encoded_token)
-        except InvalidSignatureError as ise:
-            logger.warning("Invalid signature for client_id [%s], exception [%s]", issuer, ise)
-            return False
-        except Exception as e:
-            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s], exception [%s]",
-                           issuer, e)
-            return False
+        smart_service: SmartService = self.get_smart_service(client_id)
 
-    def decode_with_jwks(self, issuer, encoded_token):
-        jwks_endpoint = f'{issuer}/.well-known/jwks.json'
-        jwks_client = PyJWKClient(jwks_endpoint)
+        try:
+            if smart_service.jwks_endpoint:
+                return self.decode_with_jwks(smart_service, encoded_token)
+            elif smart_service.public_key:
+                return self.decode_with_public_key(smart_service, encoded_token)
+            else:
+                logger.error(f"No JWKS or Public Key found on smart service with client_id {client_id}")
+        except InvalidSignatureError as ise:
+            logger.warning(f"Invalid signature for client_id {client_id}, exception {ise}")
+            return
+        except Exception as e:
+            logger.warning(
+                f"Something went wrong whilst trying to decode the JWT for client_id {client_id}, exception {e}")
+            return
+
+    def decode_with_jwks(self, smart_service, encoded_token):
+
+        jwks_client = PyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
-        # TODO, what about the aud?
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config[
                                        'OIDC_SMART_CONFIG_SIGNING_ALGS'],
                                    options={'verify_aud': False})
 
-        logger.info('JWT for issuer [%s] is decoded by JWKS - valid key', issuer)
+        logger.info('JWT for client_id [%s] is decoded by JWKS - valid key', smart_service.client_id)
         return decoded_jwt
+
+    def decode_with_public_key(self, smart_service, encoded_token):
+
+        public_key = smart_service.public_key
+
+        if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
+            logger.debug(
+                "public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags",
+                smart_service.client_id)
+            public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
+
+        decoded_jwt = pyjwt.decode(encoded_token, public_key,
+                                   algorithms=["RS512"],
+                                   options={'verify_aud': False})
+
+        logger.info(f'JWT for client_id {smart_service.client_id} is decoded by PUBLIC KEY - valid key')
+        return decoded_jwt
+
+    def get_smart_service(self, client_id):
+        smart_service = SmartService.query.filter_by(client_id=client_id).first()
+        logger.info(f'Matched issuer {client_id} to smart service {smart_service}')
+
+        return smart_service
 
 
 smart_hti_on_fhir_service = SmartHtiOnFhirService()
