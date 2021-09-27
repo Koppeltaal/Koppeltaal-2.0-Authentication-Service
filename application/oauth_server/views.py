@@ -274,7 +274,7 @@ def create_blueprint() -> Blueprint:
             jwt = oauth2_client_credentials_service.verify_and_get_token()
 
             if jwt:
-                logger.info("Generating OAuth access token for issuer [%s]", jwt['iss'])
+                logger.info(f"Generating OAuth access token for issuer {jwt['iss']}")
                 oauth2_token = Oauth2Token()
                 oauth2_token.client_id = jwt['iss']
                 oauth2_token.scope = request.form.get('scope')  # TODO: Verify if scope is allowed?

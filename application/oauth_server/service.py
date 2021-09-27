@@ -85,8 +85,8 @@ class Oauth2ClientCredentialsService:
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 
         if not smart_service or smart_service.status != SmartServiceStatus.APPROVED:
-            logger.warning("Discontinuing request for client_id [%s], smart service not found or status not approved",
-                           client_id)
+            logger.warning(
+                f"Discontinuing request for client_id {client_id}, smart service not found or status not approved")
             return
 
         if not unverified_decoded_jwt['jti']:
@@ -95,7 +95,7 @@ class Oauth2ClientCredentialsService:
 
         # FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
         if unverified_decoded_jwt['jti'] in self.consumed_jti_tokens:
-            logger.warning("JWT is being replayed - jti [%s] is already consumed", unverified_decoded_jwt['jti'])
+            logger.warning(f"JWT is being replayed - jti {unverified_decoded_jwt['jti']} is already consumed")
             return
 
         self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
@@ -106,13 +106,13 @@ class Oauth2ClientCredentialsService:
             elif smart_service.public_key:
                 return self.decode_with_public_key(smart_service, encoded_token)
             else:
-                logger.error("No JWKS or Public Key found on smart service with client_id [%s]", client_id)
+                logger.error(f"No JWKS or Public Key found on smart service with client_id {client_id}", )
         except InvalidSignatureError as ise:
-            logger.warning("Invalid signature for client_id [%s], exception [%s]", client_id, ise)
+            logger.warning(f"Invalid signature for client_id {client_id}, exception {ise}")
             return
         except Exception as e:
-            logger.warning("Something went wrong whilst trying to decode the JWT for client_id [%s], exception [%s]",
-                           client_id, e)
+            logger.warning(
+                f"Something went wrong whilst trying to decode the JWT for client_id {client_id}, exception {e}")
             return
 
     def decode_with_jwks(self, smart_service, encoded_token):
@@ -125,7 +125,7 @@ class Oauth2ClientCredentialsService:
                                    audience=current_app.config[
                                        'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
 
-        logger.info('JWT for client_id [%s] is decoded by JWKS - valid key', smart_service.client_id)
+        logger.info(f'JWT for client_id {smart_service.client_id} is decoded by JWKS - valid key')
         return decoded_jwt
 
     def decode_with_public_key(self, smart_service, encoded_token):
@@ -134,8 +134,7 @@ class Oauth2ClientCredentialsService:
 
         if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
             logger.debug(
-                "public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags",
-                smart_service.client_id)
+                f"public key for client_id {smart_service.client_id} didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags")
             public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
 
         decoded_jwt = pyjwt.decode(encoded_token, public_key,
@@ -143,7 +142,7 @@ class Oauth2ClientCredentialsService:
                                    audience=current_app.config[
                                        'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
 
-        logger.info('JWT for client_id [%s] is decoded by PUBLIC KEY - valid key', smart_service.client_id)
+        logger.info(f'JWT for client_id {smart_service.client_id} is decoded by PUBLIC KEY - valid key')
         return decoded_jwt
 
     def get_smart_service(self, unverified_decoded_jwt):
@@ -153,15 +152,12 @@ class Oauth2ClientCredentialsService:
 
         if issuer != subject or client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer":
             logger.warning(
-                'Invalid JWT - issuer != subject == [%s] and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" == [%s]',
-                issuer != subject,
-                client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-            )
+                f'Invalid JWT - issuer != subject == {issuer != subject} and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" == {client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}')
 
             return
 
         smart_service = SmartService.query.filter_by(client_id=issuer).first()
-        logger.info('Matched issuer [%s] to smart service [%s]', issuer, smart_service)
+        logger.info(f'Matched issuer {issuer} to smart service {smart_service}')
 
         return smart_service
 
@@ -179,7 +175,7 @@ class SmartHtiOnFhirService:
 
         # FIXME: This should be checked against a shared cache like Redis to support multiple instances / ease of rebooting the  application
         if unverified_decoded_jwt['jti'] in self.consumed_jti_tokens:
-            logger.warning("JWT is being replayed - jti [%s] is already consumed", unverified_decoded_jwt['jti'])
+            logger.warning(f"JWT is being replayed - jti {unverified_decoded_jwt['jti']} is already consumed")
             return
 
         self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
@@ -210,7 +206,7 @@ class SmartHtiOnFhirService:
                                        'OIDC_SMART_CONFIG_SIGNING_ALGS'],
                                    options={'verify_aud': False})
 
-        logger.info('JWT for client_id [%s] is decoded by JWKS - valid key', smart_service.client_id)
+        logger.info(f'JWT for client_id {smart_service.client_id} is decoded by JWKS - valid key')
         return decoded_jwt
 
     def decode_with_public_key(self, smart_service, encoded_token):
@@ -219,8 +215,7 @@ class SmartHtiOnFhirService:
 
         if not public_key.startswith("-----BEGIN PUBLIC KEY-----"):
             logger.debug(
-                "public key for client_id [%s] didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags",
-                smart_service.client_id)
+                f"public key for client_id {smart_service.client_id} didn't contain -----BEGIN PUBLIC KEY-----, injecting start and end tags")
             public_key = '-----BEGIN PUBLIC KEY-----\n' + public_key + '\n-----END PUBLIC KEY-----'
 
         decoded_jwt = pyjwt.decode(encoded_token, public_key,
