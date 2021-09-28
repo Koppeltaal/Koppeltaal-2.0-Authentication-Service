@@ -186,6 +186,9 @@ class SmartHtiOnFhirService:
         self.consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
 
         smart_service: SmartService = self.get_smart_service(issuer)
+        if not smart_service:
+            logger.warning(f"Cannot find smart_service for issuer: {issuer}")
+            return
 
         try:
             if smart_service.jwks_endpoint:
