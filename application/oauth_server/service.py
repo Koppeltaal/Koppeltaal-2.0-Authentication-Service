@@ -77,10 +77,11 @@ class Oauth2ClientCredentialsService:
     def verify_and_get_token(self):
         encoded_token = request.form.get('client_assertion')
 
+        logger.debug(f'Received encoded token: {encoded_token}')
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
         client_id = unverified_decoded_jwt['iss']
 
-        logger.debug(f'Verifying received token: {unverified_decoded_jwt}')
+        logger.debug(f'Verifying received token with body: {unverified_decoded_jwt} and header: {pyjwt.get_unverified_header(encoded_token)}')
 
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 
