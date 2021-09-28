@@ -167,8 +167,9 @@ class SmartHtiOnFhirService:
     def __init__(self):
         self.consumed_jti_tokens = []
 
-    def validate_launch_token(self, encoded_token: str, client_id: str):
+    def validate_launch_token(self, encoded_token: str):
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        client_id = unverified_decoded_jwt['iss']
 
         if not unverified_decoded_jwt['jti']:
             logger.warning("JWT doesn't contain a jti value")
