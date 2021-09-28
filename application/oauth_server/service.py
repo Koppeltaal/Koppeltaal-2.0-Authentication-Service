@@ -170,11 +170,9 @@ class SmartHtiOnFhirService:
     def __init__(self):
         self.consumed_jti_tokens = []
 
-    def validate_launch_token(self, encoded_token: str, audience: str):
+    def validate_launch_token(self, encoded_token: str):
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
         issuer = unverified_decoded_jwt['iss']
-        ## The audience is expected to be the client id of the recieving application.
-        assert audience == unverified_decoded_jwt['aud']
 
         if not unverified_decoded_jwt['jti']:
             logger.warning("JWT doesn't contain a jti value")
@@ -191,9 +189,9 @@ class SmartHtiOnFhirService:
 
         try:
             if smart_service.jwks_endpoint:
-                return self.decode_with_jwks(smart_service, encoded_token, audience)
+                return self.decode_with_jwks(smart_service, encoded_token)
             elif smart_service.public_key:
-                return self.decode_with_public_key(smart_service, encoded_token, audience)
+                return self.decode_with_public_key(smart_service, encoded_token)
             else:
                 logger.error(f"No JWKS or Public Key found on smart service with client_id {issuer}")
         except InvalidSignatureError as ise:
@@ -204,7 +202,7 @@ class SmartHtiOnFhirService:
                 f"Something went wrong whilst trying to decode the JWT for client_id {issuer}, exception {e}")
             return
 
-    def decode_with_jwks(self, smart_service, encoded_token, audience):
+    def decode_with_jwks(self, smart_service, encoded_token):
 
         jwks_client = PyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
@@ -216,7 +214,7 @@ class SmartHtiOnFhirService:
         logger.info(f'JWT for client_id {smart_service.client_id} is decoded by JWKS - valid key')
         return decoded_jwt
 
-    def decode_with_public_key(self, smart_service, encoded_token, audience):
+    def decode_with_public_key(self, smart_service, encoded_token):
 
         public_key = smart_service.public_key
 
