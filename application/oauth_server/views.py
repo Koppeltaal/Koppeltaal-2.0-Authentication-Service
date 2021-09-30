@@ -116,7 +116,7 @@ def create_blueprint() -> Blueprint:
             rv['id_token'] = oauth2_token.id_token
 
         if oauth2_token.scope:
-            rv['scope'] = oauth2_token.id_token
+            rv['scope'] = oauth2_token.scope
 
         if oauth2_token.refresh_token:
             rv['refresh_token'] = oauth2_token.refresh_token
