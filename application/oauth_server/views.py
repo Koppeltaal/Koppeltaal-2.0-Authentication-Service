@@ -115,17 +115,15 @@ def create_blueprint() -> Blueprint:
         if oauth2_token.id_token:
             rv['id_token'] = oauth2_token.id_token
 
+        if oauth2_token.scope:
+            rv['scope'] = oauth2_token.id_token
+
         if oauth2_token.refresh_token:
             rv['refresh_token'] = oauth2_token.refresh_token
 
         if oauth2_token.subject:
             subject: str = oauth2_token.subject
-            if subject.startswith('Patient/'):
-                rv['patient'] = subject
-            if subject.startswith('Practitioner/'):
-                rv['practitioner'] = subject
-            if subject.startswith('RelatedPerson/'):
-                rv['relatedperson'] = subject
+            rv['user'] = subject
 
         body = _get_launch_token_body(oauth2_session)
         if 'task' in body:
