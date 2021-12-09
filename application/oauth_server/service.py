@@ -77,14 +77,18 @@ class TokenService:
 class Oauth2ClientCredentialsService:
     consumed_jti_tokens = []
 
-    def verify_and_get_token(self):
-        encoded_token = request.form.get('client_assertion')
+    def verify_and_get_token(self, encoded_token):
 
         logger.debug(f'Received encoded token: {encoded_token}')
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        if 'iss' not in unverified_decoded_jwt:
+            logger.warning("JWT doesn't contain a iss value")
+            return
+
         client_id = unverified_decoded_jwt['iss']
 
-        logger.debug(f'Verifying received token with body: {unverified_decoded_jwt} and header: {pyjwt.get_unverified_header(encoded_token)}')
+        logger.debug(
+            f'Verifying received token with body: {unverified_decoded_jwt} and header: {pyjwt.get_unverified_header(encoded_token)}')
 
         smart_service: SmartService = self.get_smart_service(unverified_decoded_jwt)
 
@@ -93,7 +97,7 @@ class Oauth2ClientCredentialsService:
                 f"Discontinuing request for client_id {client_id}, smart service not found or status not approved")
             return
 
-        if not unverified_decoded_jwt['jti']:
+        if 'jti' not in unverified_decoded_jwt:
             logger.warning("JWT doesn't contain a jti value")
             return
 
@@ -159,6 +163,17 @@ class Oauth2ClientCredentialsService:
                 f'Invalid JWT - issuer != subject == {issuer != subject} and client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" == {client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}')
 
             return
+
+        smart_service = SmartService.query.filter_by(client_id=issuer).first()
+        logger.info(f'Matched issuer {issuer} to smart service {smart_service}')
+
+        return smart_service
+
+
+class Oauth2IntrospectionService(Oauth2ClientCredentialsService):
+
+    def get_smart_service(self, unverified_decoded_jwt):
+        issuer = unverified_decoded_jwt['iss']
 
         smart_service = SmartService.query.filter_by(client_id=issuer).first()
         logger.info(f'Matched issuer {issuer} to smart service {smart_service}')
@@ -242,3 +257,4 @@ class SmartHtiOnFhirService:
 smart_hti_on_fhir_service = SmartHtiOnFhirService()
 token_service = TokenService()
 oauth2_client_credentials_service = Oauth2ClientCredentialsService()
+oauth2_introspection_service = Oauth2IntrospectionService()

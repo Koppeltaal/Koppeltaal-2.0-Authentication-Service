@@ -5,16 +5,17 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
 import logging
-from encodings.base64_codec import base64_decode
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
 
+from encodings.base64_codec import base64_decode
 from flask import Blueprint, redirect, request, jsonify, current_app
 
 from application.database import db
 from application.oauth_server.model import Oauth2Session, Oauth2Token
-from application.oauth_server.service import token_service, oauth2_client_credentials_service, smart_hti_on_fhir_service
+from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
+    smart_hti_on_fhir_service, oauth2_introspection_service
 
 DEFAULT_SCOPE = '*/write'
 logger = logging.getLogger('oauth_views')
@@ -66,6 +67,19 @@ def create_blueprint() -> Blueprint:
             return token_client_credentials()
         else:
             return 'Bad Request', 400
+
+    @blueprint.route('/oauth2/introspect', methods=['POST'])
+    def introspect():
+        token = request.values.get('token')
+        if not token:
+            return 'Bad Request, required field token missing', 400
+        decoded = oauth2_introspection_service.verify_and_get_token(token)
+        if decoded:
+            # TODO: validate fields
+            rv = decoded.copy()
+            rv['active'] = True
+            return jsonify(rv)
+        return jsonify({'active': False})
 
     def route_from_authorise(oauth_session: Oauth2Session):
         # This is a SMART HTI on FHIR launch
@@ -193,7 +207,7 @@ def create_blueprint() -> Blueprint:
         client_assertion_type = request.form.get('client_assertion_type')
         # Check if the client_assertion_type is set correctly.
         if client_assertion_type == 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer':
-            jwt = oauth2_client_credentials_service.verify_and_get_token()
+            jwt = oauth2_client_credentials_service.verify_and_get_token(request.form.get('client_assertion'))
 
             if jwt:
                 logger.info(f"Generating OAuth access token for issuer {jwt['iss']}")

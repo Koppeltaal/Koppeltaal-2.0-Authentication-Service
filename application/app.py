@@ -13,7 +13,6 @@ from flask_sqlalchemy import SQLAlchemy
 
 from application import oauth_server, jwks
 from application.database import db
-from application.oauth_server.service import oauth2_client_credentials_service
 
 
 def register_blueprints(app):
@@ -26,7 +25,7 @@ def register_error_handlers(app):
 
 
 def ensure_oidc_keys(app):
-    if not app.config['OIDC_JWT_PUBLIC_KEY'] or not app.config['OIDC_JWT_PRIVATE_KEY']:
+    if 'OIDC_JWT_PUBLIC_KEY' not in app.config or 'OIDC_JWT_PRIVATE_KEY' not in app.config:
         print('OIDC_JWT_PUBLIC_KEY or OIDC_JWT_PRIVATE_KEY is not set, generating a pair')
         key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
         key.check_key_op('sign')
