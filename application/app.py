@@ -25,7 +25,7 @@ def register_error_handlers(app):
 
 
 def ensure_oidc_keys(app):
-    if 'OIDC_JWT_PUBLIC_KEY' not in app.config or 'OIDC_JWT_PRIVATE_KEY' not in app.config:
+    if not _has_config_key_set(app, 'OIDC_JWT_PUBLIC_KEY') or not _has_config_key_set(app, 'OIDC_JWT_PRIVATE_KEY'):
         print('OIDC_JWT_PUBLIC_KEY or OIDC_JWT_PRIVATE_KEY is not set, generating a pair')
         key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
         key.check_key_op('sign')
@@ -40,6 +40,10 @@ def ensure_oidc_keys(app):
         app.config['OIDC_JWT_PRIVATE_KEY'] = private_key_bytes
 
     pass
+
+
+def _has_config_key_set(app, cnfg_key_name):
+    return cnfg_key_name in app.config and len(app.config[cnfg_key_name]) > 0
 
 
 def create_app(config=None) -> Flask:
