@@ -129,7 +129,7 @@ def create_blueprint() -> Blueprint:
             logging.error(f'[{oauth2_session.id}] user [{hti_launch_token["sub"]}] not found (based on hti subject)')
             return f'Bad request, user [{hti_launch_token["sub"]}] not found (based on hti subject)', 400
 
-        logging.info(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]')
+        logging.info(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]\n\nuser: {str(launching_user_resource)}')
 
         if 'identifier' not in launching_user_resource:
             logging.error(f'[{oauth2_session.id}] Found user resource but no identifiers on user [{hti_launch_token["sub"]}]')
