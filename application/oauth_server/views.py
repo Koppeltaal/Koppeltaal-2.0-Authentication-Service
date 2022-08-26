@@ -93,6 +93,9 @@ def create_blueprint() -> Blueprint:
         if not oauth2_session:
             return 'Bad request, No session found based on id ' + state, 400
 
+        hti_launch_token = pyjwt.decode(oauth2_session.launch, options={"verify_signature": False})
+        print(f'[{oauth2_session.id}] Consuming idp oidc code for user {hti_launch_token["sub"]}')
+
         code = request.values.get('code')
         if not code:
             return 'Bad request, no code found on the authentication response', 400
@@ -111,18 +114,27 @@ def create_blueprint() -> Blueprint:
         if not email:
             return 'Bad request, no email found in id_token', 400
 
+        print(f'[{oauth2_session.id}] IDP id_token contains email [{email}]')
+
         # get the user from the FHIR server, to verify if the Patient has this email set as an identifier
         access_token = token_service.get_system_access_token("system")
-        hti_launch_token = pyjwt.decode(oauth2_session.launch, options={"verify_signature": False})
 
         launching_user_resource = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["sub"]}', headers={"Authorization": "Bearer " + access_token}).json()
         if not launching_user_resource:
             return f'Bad request, user [{hti_launch_token["sub"]}] not found (based on hti subject)', 400
 
+        print(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]')
+
+        if 'identifier' not in launching_user_resource:
+            return f'Bad request, user [{hti_launch_token["sub"]}] found but no identifiers are present', 400
+
         identifiers = launching_user_resource['identifier']
         values = list(map(lambda identifier: identifier['value'] if 'value' in identifier else "", identifiers))
         if email not in values:
+            print(f'[{oauth2_session.id}] user id mismatch, expected [{email}] but found {str(values)}')
             return 'Bad request, patient email not found on Patient resource', 400
+
+        print(f'[{oauth2_session.id}] user id matched between HTI and IDP by email [{email}]')
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return redirect(
