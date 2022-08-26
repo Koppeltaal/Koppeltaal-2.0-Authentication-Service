@@ -62,6 +62,12 @@ OIDC_JWT_PUBLIC_KEY = envget_str('OIDC_JWT_PUBLIC_KEY', '')
 OIDC_JWT_PRIVATE_KEY = envget_str('OIDC_JWT_PRIVATE_KEY', '')
 OIDC_JWT_EXP_TIME_ACCESS_TOKEN = envget_int('OIDC_JWT_EXP_TIME_ACCESS_TOKEN', 60)
 
+OIDC_AUTHORIZE_ENDPOINT = envget_str('OIDC_AUTHORIZE_ENDPOINT', 'https://iam.koppeltaal.headease.nl/auth/realms/Koppeltaal2/protocol/openid-connect/auth')
+OIDC_TOKEN_ENDPOINT = envget_str('OIDC_TOKEN_ENDPOINT', 'https://iam.koppeltaal.headease.nl/auth/realms/Koppeltaal2/protocol/openid-connect/token')
+OIDC_AUTHORIZE_CLIENT_ID = envget_str('OIDC_AUTHORIZE_CLIENT_ID', 'poc-auth-service')
+OIDC_AUTHORIZE_CLIENT_SECRET = envget_str('OIDC_AUTHORIZE_CLIENT_SECRET', '<SECRET>')
+OIDC_AUTHORIZE_REDIRECT_URL = envget_str('OIDC_AUTHORIZE_REDIRECT_URL', 'http://localhost:5000/idp/oidc/code')
+
 # https://hl7.org/fhir/uv/bulkdata/authorization/index.html#advertising-server-conformance-with-smart-backend-services
 OIDC_SMART_CONFIG_ENABLED = envget_bool('OIDC_SMART_CONFIG_ENABLED', False)
 OIDC_SMART_CONFIG_TOKEN_ENDPOINT = envget_str('OIDC_SMART_CONFIG_TOKEN_ENDPOINT', FHIR_CLIENT_SERVERURL + '/oauth2/token')
