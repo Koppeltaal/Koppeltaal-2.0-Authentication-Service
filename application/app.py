@@ -11,13 +11,14 @@ from flask_behind_proxy import FlaskBehindProxy
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
-from application import oauth_server, jwks
+from application import oauth_server, jwks, idp_client
 from application.database import db
 
 
 def register_blueprints(app):
     app.register_blueprint(oauth_server.views.create_blueprint())
     app.register_blueprint(jwks.views.create_blueprint())
+    app.register_blueprint(idp_client.views.create_blueprint())
 
 
 def register_error_handlers(app):
