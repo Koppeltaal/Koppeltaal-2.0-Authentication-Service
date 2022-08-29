@@ -67,7 +67,7 @@ IDP_AUTHORIZE_ENDPOINT = envget_str('IDP_AUTHORIZE_ENDPOINT', 'https://iam.koppe
 IDP_TOKEN_ENDPOINT = envget_str('IDP_TOKEN_ENDPOINT', 'https://iam.koppeltaal.headease.nl/auth/realms/Koppeltaal2/protocol/openid-connect/token')
 IDP_AUTHORIZE_CLIENT_ID = envget_str('IDP_AUTHORIZE_CLIENT_ID', 'poc-auth-service')
 IDP_AUTHORIZE_CLIENT_SECRET = envget_str('IDP_AUTHORIZE_CLIENT_SECRET', '<SECRET>')
-IDP_AUTHORIZE_REDIRECT_URL = envget_str('IDP_AUTHORIZE_REDIRECT_URL', '/idp/oidc/code')
+IDP_AUTHORIZE_REDIRECT_URL = envget_str('IDP_AUTHORIZE_REDIRECT_URL', 'http://localhost:5000/idp/oidc/code')
 
 SMART_BACKEND_SERVICE_CLIENT_ID = envget_str('SMART_BACKEND_SERVICE_CLIENT_ID', 'd44ba2e2-4762-465f-b825-d2b291d07db6')
 
