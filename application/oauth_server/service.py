@@ -28,7 +28,7 @@ class TokenService:
                                    scope=scope,
                                    azp=oauth2_token.client_id)
 
-    def get_system_access_token(self, username: str) -> str:
+    def get_system_access_token(self) -> str:
         return self._get_jwt_token(120, 'fhir-server',
                                    type='access',
                                    sub=current_app.config['SMART_BACKEND_SERVICE_CLIENT_ID'],
