@@ -122,18 +122,15 @@ def create_blueprint() -> Blueprint:
         logger.info(f'[{oauth2_session.id}] IDP id_token contains email [{email}]')
 
         # get the user from the FHIR server, to verify if the Patient has this email set as an identifier
-        access_token = token_service.get_system_access_token("system")
+        access_token = token_service.get_system_access_token()
 
-        launching_user_resource = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["sub"]}', headers={"Authorization": "Bearer " + access_token}).json()
-        if not launching_user_resource:
-            logger.error(f'[{oauth2_session.id}] user [{hti_launch_token["sub"]}] not found (based on hti subject)')
-            return f'Bad request, user [{hti_launch_token["sub"]}] not found (based on hti subject)', 400
+        user_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["sub"]}', headers={"Authorization": "Bearer " + access_token})
+        if not user_response.ok:
+            logger.error(f'Failed to fetch user {hti_launch_token["sub"]} with error code [{user_response.status_code}] and message: \n{user_response.reason}')
+            return 'Bad request, user could not be fetched from store', 400
 
-        logger.info(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]\n\nuser: {str(launching_user_resource)}')
-
-        if 'identifier' not in launching_user_resource:
-            logger.error(f'[{oauth2_session.id}] Found user resource but no identifiers on user [{hti_launch_token["sub"]}]')
-            return f'Bad request, user [{hti_launch_token["sub"]}] found but no identifiers are present', 400
+        launching_user_resource = user_response.json()
+        logger.debug(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]\n\nuser: {str(launching_user_resource)}')
 
         identifiers = launching_user_resource['identifier']
         values = list(map(lambda identifier: identifier['value'] if 'value' in identifier else "", identifiers))
