@@ -87,20 +87,20 @@ def create_blueprint() -> Blueprint:
     def consume_idp_code():
         state = request.values.get('state')
         if not state:
-            logging.error(f' no state found on the authentication response')
+            logger.error(f' no state found on the authentication response')
             return 'Bad request, no state found on the authentication response', 400
 
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(id=state).first()
         if not oauth2_session:
-            logging.error(f' No session found based on id {state}')
+            logger.error(f' No session found based on id {state}')
             return 'Bad request, No session found based on id ' + state, 400
 
         hti_launch_token = pyjwt.decode(oauth2_session.launch, options={"verify_signature": False})
-        logging.info(f'[{oauth2_session.id}] Consuming idp oidc code for user {hti_launch_token["sub"]}')
+        logger.info(f'[{oauth2_session.id}] Consuming idp oidc code for user {hti_launch_token["sub"]}')
 
         code = request.values.get('code')
         if not code:
-            logging.error(f'[{oauth2_session.id}] no code parameter found')
+            logger.error(f'[{oauth2_session.id}] no code parameter found')
             return 'Bad request, no code found on the authentication response', 400
 
         # exchange the IDP code, we need the id_token from the response to verify the authenticated user matches the
@@ -110,38 +110,38 @@ def create_blueprint() -> Blueprint:
         oidc_token = exchange_idp_code(code)
         encoded_id_token = oidc_token['id_token']
         if not encoded_id_token:
-            logging.error(f'[{oauth2_session.id}] no id_token found')
+            logger.error(f'[{oauth2_session.id}] no id_token found')
             return 'Bad request, no id_token found', 400
 
         id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
         email = id_token['email']
         if not email:
-            logging.error(f'[{oauth2_session.id}] no email found in id_token')
+            logger.error(f'[{oauth2_session.id}] no email found in id_token')
             return 'Bad request, no email found in id_token', 400
 
-        logging.info(f'[{oauth2_session.id}] IDP id_token contains email [{email}]')
+        logger.info(f'[{oauth2_session.id}] IDP id_token contains email [{email}]')
 
         # get the user from the FHIR server, to verify if the Patient has this email set as an identifier
         access_token = token_service.get_system_access_token("system")
 
         launching_user_resource = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["sub"]}', headers={"Authorization": "Bearer " + access_token}).json()
         if not launching_user_resource:
-            logging.error(f'[{oauth2_session.id}] user [{hti_launch_token["sub"]}] not found (based on hti subject)')
+            logger.error(f'[{oauth2_session.id}] user [{hti_launch_token["sub"]}] not found (based on hti subject)')
             return f'Bad request, user [{hti_launch_token["sub"]}] not found (based on hti subject)', 400
 
-        logging.info(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]\n\nuser: {str(launching_user_resource)}')
+        logger.info(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]\n\nuser: {str(launching_user_resource)}')
 
         if 'identifier' not in launching_user_resource:
-            logging.error(f'[{oauth2_session.id}] Found user resource but no identifiers on user [{hti_launch_token["sub"]}]')
+            logger.error(f'[{oauth2_session.id}] Found user resource but no identifiers on user [{hti_launch_token["sub"]}]')
             return f'Bad request, user [{hti_launch_token["sub"]}] found but no identifiers are present', 400
 
         identifiers = launching_user_resource['identifier']
         values = list(map(lambda identifier: identifier['value'] if 'value' in identifier else "", identifiers))
         if email not in values:
-            logging.error(f'[{oauth2_session.id}] user id mismatch, expected [{email}] but found {str(values)}')
+            logger.error(f'[{oauth2_session.id}] user id mismatch, expected [{email}] but found {str(values)}')
             return 'Bad request, patient email not found on Patient resource', 400
 
-        logging.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by email [{email}]')
+        logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by email [{email}]')
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return redirect(
