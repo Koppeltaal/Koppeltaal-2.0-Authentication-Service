@@ -226,6 +226,8 @@ def create_blueprint() -> Blueprint:
                 db.session.add(oauth2_token)
                 db.session.commit()
                 return jsonify(oauth2_token_task_to_json(oauth2_token))
+        else:
+            logger.info(f"Invalid client_assertion_type received: {client_assertion_type}")
 
         logger.info("Invalid client credential request - returning access denied")
         return 'Access Denied', 401
