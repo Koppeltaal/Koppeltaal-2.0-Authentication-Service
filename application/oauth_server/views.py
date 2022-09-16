@@ -4,21 +4,19 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
-
-import requests
-import jwt as pyjwt
 import logging
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
 
+import jwt as pyjwt
 from encodings.base64_codec import base64_decode
 from flask import Blueprint, redirect, request, jsonify, current_app
 
 from application.database import db
 from application.oauth_server.model import Oauth2Session, Oauth2Token
 from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
-    smart_hti_on_fhir_service, oauth2_introspection_service
+    smart_hti_on_fhir_service, server_oauth2_service
 
 DEFAULT_SCOPE = '*/write'
 logger = logging.getLogger('oauth_views')
@@ -72,10 +70,21 @@ def create_blueprint() -> Blueprint:
 
     @blueprint.route('/oauth2/introspect', methods=['POST'])
     def introspect():
+        "There are 3 types of JWT tokens, launch token (client id from launching party, aud launch URL), client_credential(assertion-type urn:ietf:params:oauth:client-assertion-type:jwt-bearer) token and access_token (iss = myself)"
         token = request.values.get('token')
         if not token:
             return 'Bad Request, required field token missing', 400
-        decoded = oauth2_introspection_service.verify_and_get_token(token)
+
+        unverified_decoded_jwt = pyjwt.decode(token, options={"verify_signature": False})
+        iss = unverified_decoded_jwt.get('iss')
+        if not iss:
+            return jsonify({'active': False})
+
+        if iss == request.url_root: # signed by self
+            decoded = server_oauth2_service.verify_and_get_token(token)
+        else:
+            decoded = oauth2_client_credentials_service.verify_and_get_token(token)
+
         if decoded:
             # TODO: validate fields
             rv = decoded.copy()

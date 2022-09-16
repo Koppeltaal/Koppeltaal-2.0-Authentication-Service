@@ -4,8 +4,10 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-from authlib.jose import JsonWebKey, KeySet, Key
+from authlib.jose import KeySet, Key
 from flask import Blueprint, current_app, jsonify, abort
+
+from application.jwks.service import keypair_service
 
 
 def create_blueprint() -> Blueprint:
@@ -13,15 +15,14 @@ def create_blueprint() -> Blueprint:
 
     @blueprint.route('/.well-known/jwks.json')
     def jwks():
-        key: Key = JsonWebKey.import_key(current_app.config['OIDC_JWT_PUBLIC_KEY'])
+        key: Key = keypair_service.get_public_key()
         key_set: KeySet = KeySet([key])
 
         return jsonify(key_set.as_dict())
 
     @blueprint.route('/.well-known/smart-configuration', methods=['GET'])
     def smart_configuration():
-
-        if(not current_app.config['OIDC_SMART_CONFIG_ENABLED']):
+        if (not current_app.config['OIDC_SMART_CONFIG_ENABLED']):
             abort(404)
 
         return jsonify(
@@ -29,6 +30,6 @@ def create_blueprint() -> Blueprint:
             token_endpoint_auth_methods_supported=(current_app.config['OIDC_SMART_CONFIG_AUTH_METHODS']),
             token_endpoint_auth_signing_alg_values_supported=(current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS']),
             scopes_supported=(current_app.config['OIDC_SMART_CONFIG_SCOPES']),
-            registration_endpoint=(current_app.config['OIDC_SMART_CONFIG_REGISTRATION_ENDPOINT']));
+            registration_endpoint=(current_app.config['OIDC_SMART_CONFIG_REGISTRATION_ENDPOINT']))
 
     return blueprint
