@@ -5,7 +5,6 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 from authlib.jose import JsonWebKey, Key
-from cryptography.hazmat.primitives import serialization
 from flask import Flask
 from flask_behind_proxy import FlaskBehindProxy
 from flask_cors import CORS
@@ -13,6 +12,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 from application import oauth_server, jwks, idp_client
 from application.database import db
+from .utils import get_private_key_as_pem, get_public_key_as_pem
 
 
 def register_blueprints(app):
@@ -30,14 +30,9 @@ def ensure_oidc_keys(app):
         print('OIDC_JWT_PUBLIC_KEY or OIDC_JWT_PRIVATE_KEY is not set, generating a pair')
         key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
         key.check_key_op('sign')
-        public_key = key.get_public_key()
-        private_key = key.get_private_key()
-        public_key_bytes = public_key.public_bytes(encoding=serialization.Encoding.PEM,
-                                                   format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        public_key_bytes = get_public_key_as_pem(key)
         app.config['OIDC_JWT_PUBLIC_KEY'] = public_key_bytes
-        private_key_bytes = private_key.private_bytes(encoding=serialization.Encoding.PEM,
-                                                      format=serialization.PrivateFormat.PKCS8,
-                                                      encryption_algorithm=serialization.NoEncryption())
+        private_key_bytes = get_private_key_as_pem(key)
         app.config['OIDC_JWT_PRIVATE_KEY'] = private_key_bytes
 
     pass
