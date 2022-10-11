@@ -9,10 +9,12 @@ from flask.testing import FlaskClient
 from application import create_app
 from application.database import db
 from application.oauth_server.model import SmartService, SmartServiceStatus
+from application.utils import get_private_key_as_pem, get_public_key_as_pem
+from utils import _client_assertion
 
 
 @pytest.fixture()
-def client(server_key: Key):
+def testing_app(server_key: Key):
     private_key_bytes = get_private_key_as_pem(server_key)
 
     app = create_app({'TESTING': True,
@@ -26,23 +28,30 @@ def client(server_key: Key):
             yield client
 
 
-
 @pytest.fixture()
-def smart_service(key: Key):
-    public_key = key.get_public_key()
-    public_key_bytes = public_key.public_bytes(encoding=serialization.Encoding.PEM,
-                                               format=serialization.PublicFormat.SubjectPublicKeyInfo)
+def smart_service_foreign(foreign_key, foreign_id):
     smart_service = SmartService(created_by='admin',
-                                 client_id=str(uuid4()),
+                                 client_id=foreign_id,
                                  status=SmartServiceStatus.APPROVED,
-                                 public_key=public_key_bytes.decode('utf8'))
+                                 public_key=get_public_key_as_pem(foreign_key).decode('utf8'))
     db.session.add(smart_service)
     db.session.commit()
     yield smart_service
 
 
 @pytest.fixture()
-def key() -> Key:
+def smart_service_client(client_key, client_id):
+    smart_service = SmartService(created_by='admin',
+                                 client_id=client_id,
+                                 status=SmartServiceStatus.APPROVED,
+                                 public_key=get_public_key_as_pem(client_key).decode('utf8'))
+    db.session.add(smart_service)
+    db.session.commit()
+    yield smart_service
+
+
+@pytest.fixture()
+def foreign_key() -> Key:
     key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
     key.check_key_op('sign')
     yield key
@@ -55,7 +64,32 @@ def server_key() -> Key:
     yield key
 
 
-def test_introspect_client_happy(client: FlaskClient, key: Key, smart_service: SmartService):
+@pytest.fixture()
+def client_key() -> Key:
+    key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
+    key.check_key_op('sign')
+    yield key
+
+
+@pytest.fixture()
+def client_assertion(testing_app, client_key, smart_service_client):
+    yield _client_assertion(testing_app, client_key, smart_service_client.client_id)
+
+
+@pytest.fixture()
+def client_id() -> str:
+    yield str(uuid4())
+
+
+@pytest.fixture()
+def foreign_id() -> str:
+    yield str(uuid4())
+
+
+def test_introspect_client_happy(testing_app: FlaskClient,
+                                 foreign_key: Key,
+                                 smart_service_foreign,
+                                 client_assertion):
     header = {
         "alg": "RS512",
         "typ": "JWT"
@@ -65,19 +99,21 @@ def test_introspect_client_happy(client: FlaskClient, key: Key, smart_service: S
         "name": "John Doe",
         "iat": time.time(),
         "exp": time.time() + 1000,
-        "iss": smart_service.client_id,
+        "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
-        "aud": client.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
+        "aud": testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
     }
     json_token = JsonWebToken(algorithms=['RS512'])
-    token = json_token.encode(header, payload, key)
-    data = {'token': token}
-    rv = client.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+    token = json_token.encode(header, payload, foreign_key)
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert 'active' in rv.json
     assert rv.json['active']
 
 
-def test_introspect_client_fail_exp(client: FlaskClient, key: JsonWebKey, smart_service: SmartService):
+def test_introspect_client_fail_exp(testing_app: FlaskClient, foreign_key, smart_service_foreign, client_assertion):
     header = {
         "alg": "RS512",
         "typ": "JWT"
@@ -87,20 +123,22 @@ def test_introspect_client_fail_exp(client: FlaskClient, key: JsonWebKey, smart_
         "name": "John Doe",
         "iat": time.time(),
         "exp": time.time() - 1000,
-        "iss": smart_service.client_id,
+        "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
-        "aud": client.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
+        "aud": testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
     }
     json_token = JsonWebToken(algorithms=['RS512'])
-    token = json_token.encode(header, payload, key)
-    data = {'token': token}
-    rv = client.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+    token = json_token.encode(header, payload, foreign_key)
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert len(rv.json) == 1
     assert 'active' in rv.json
     assert not rv.json['active']
 
 
-def test_introspect_client_fail_iss(client: FlaskClient, key: JsonWebKey, smart_service: SmartService):
+def test_introspect_client_fail_iss(testing_app: FlaskClient, foreign_key, smart_service_foreign, client_assertion):
     header = {
         "alg": "RS512",
         "typ": "JWT"
@@ -111,17 +149,21 @@ def test_introspect_client_fail_iss(client: FlaskClient, key: JsonWebKey, smart_
         "iat": time.time(),
         "exp": time.time() - 1000,
         "jti": str(uuid4()),
-        "aud": client.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
+        "aud": testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
     }
     json_token = JsonWebToken(algorithms=['RS512'])
-    token = json_token.encode(header, payload, key)
-    data = {'token': token}
-    rv = client.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+    token = json_token.encode(header, payload, foreign_key)
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert len(rv.json) == 1
     assert 'active' in rv.json
     assert not rv.json['active']
 
-def test_introspect_client_fail_enc(client: FlaskClient, key: JsonWebKey, smart_service: SmartService):
+
+def test_introspect_client_fail_enc(testing_app: FlaskClient, foreign_key: Key, smart_service_foreign,
+                                    client_assertion):
     header = {
         "alg": "HS512",
         "typ": "JWT"
@@ -131,27 +173,22 @@ def test_introspect_client_fail_enc(client: FlaskClient, key: JsonWebKey, smart_
         "name": "John Doe",
         "iat": time.time(),
         "exp": time.time() + 1000,
-        "iss": smart_service.client_id,
+        "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
-        "aud": client.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
+        "aud": testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
     }
     json_token = JsonWebToken(algorithms=['HS512'])
     token = json_token.encode(header, payload, "shared-secret")
-    data = {'token': token}
-    rv = client.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert len(rv.json) == 1
     assert 'active' in rv.json
     assert not rv.json['active']
 
 
-def get_private_key_as_pem(key: Key):
-    private_key = key.get_private_key()
-    private_key_bytes = private_key.private_bytes(encoding=serialization.Encoding.PEM,
-                                                  format=serialization.PrivateFormat.PKCS8,
-                                                  encryption_algorithm=serialization.NoEncryption())
-    return private_key_bytes
-
-def test_introspect_server_fail_exp(client: FlaskClient, server_key: Key, smart_service: SmartService):
+def test_introspect_server_fail_exp(testing_app: FlaskClient, server_key: Key, smart_service_foreign, client_assertion):
     header = {
         "alg": "RS512",
         "typ": "JWT"
@@ -163,13 +200,13 @@ def test_introspect_server_fail_exp(client: FlaskClient, server_key: Key, smart_
         "exp": time.time() - 1000,
         "iss": 'http://localhost/',
         "jti": str(uuid4()),
-        "aud": client.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
+        "aud": testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
     }
     json_token = JsonWebToken(algorithms=['RS512'])
     token = json_token.encode(header, payload, get_private_key_as_pem(server_key))
-    data = {'token': token}
-    rv = client.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert 'active' in rv.json
     assert not rv.json['active']
-
-

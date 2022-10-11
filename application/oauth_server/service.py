@@ -1,11 +1,12 @@
 import logging
 from time import time
+from typing import Dict, Any
 from uuid import uuid4
 
 import jwt as pyjwt
 from authlib.jose import jwt
 from flask import request, current_app
-from jwt import PyJWKClient, InvalidSignatureError
+from jwt import PyJWKClient, InvalidSignatureError, DecodeError
 
 from application.jwks.service import keypair_service
 from application.oauth_server.model import Oauth2Token, SmartService, SmartServiceStatus
@@ -78,10 +79,15 @@ class Oauth2ClientCredentialsService:
     """
     consumed_jti_tokens = []
 
-    def verify_and_get_token(self, encoded_token):
+    def verify_and_get_token(self, encoded_token) -> Dict[str, Any]:
 
         logger.debug(f'Received encoded token: {encoded_token}')
-        unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        try:
+            unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+        except DecodeError as e:
+            logger.warning(f"Failed to decode JWT: {e}")
+            return
+
         if 'iss' not in unverified_decoded_jwt:
             logger.warning("JWT doesn't contain a iss value")
             return
@@ -124,7 +130,7 @@ class Oauth2ClientCredentialsService:
                 f"Something went wrong whilst trying to decode the JWT for client_id {client_id}, exception {e}")
             return
 
-    def decode_with_jwks(self, smart_service, encoded_token):
+    def decode_with_jwks(self, smart_service, encoded_token) -> Dict[str, Any]:
 
         jwks_client = PyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
@@ -137,7 +143,7 @@ class Oauth2ClientCredentialsService:
         logger.info(f'JWT for client_id {smart_service.client_id} is decoded by JWKS - valid key')
         return decoded_jwt
 
-    def decode_with_public_key(self, smart_service, encoded_token):
+    def decode_with_public_key(self, smart_service, encoded_token) -> Dict[str, Any]:
 
         public_key = smart_service.public_key
 
