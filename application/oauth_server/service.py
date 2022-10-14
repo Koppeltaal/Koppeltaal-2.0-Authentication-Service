@@ -79,7 +79,7 @@ class Oauth2ClientCredentialsService:
     """
     consumed_jti_tokens = []
 
-    def verify_and_get_token(self, encoded_token) -> Dict[str, Any]:
+    def verify_and_get_token(self, encoded_token):
 
         logger.debug(f'Received encoded token: {encoded_token}')
         try:

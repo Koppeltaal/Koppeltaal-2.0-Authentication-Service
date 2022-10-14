@@ -35,7 +35,6 @@ def ensure_oidc_keys(app):
         private_key_bytes = get_private_key_as_pem(key)
         app.config['OIDC_JWT_PRIVATE_KEY'] = private_key_bytes
 
-    pass
 
 
 def _has_config_key_set(app, cnfg_key_name):

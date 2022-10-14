@@ -189,7 +189,7 @@ def create_blueprint() -> Blueprint:
         logger.info(f"Generating OAuth access token for issuer {jwt['iss']}")
         oauth2_token = Oauth2Token()
         oauth2_token.client_id = jwt['iss']
-        oauth2_token.scope = request.form.get('scope')  # TODO: Verify if scope is allowed?
+        oauth2_token.scope = request.form.get('scope')
         oauth2_token.access_token = token_service.get_access_token(oauth2_token, request.form.get('scope'))
         # In the client_credentials flow, the refresh_token is not allowed
         # oauth2_token.refresh_token = token_service.get_refresh_token()

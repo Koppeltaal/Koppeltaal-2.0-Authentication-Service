@@ -22,7 +22,7 @@ class IdpService:
     def consume_idp_code(self) -> Tuple[str, int]:
         state = request.values.get('state')
         if not state:
-            logger.error(f'No state found on the authentication response')
+            logger.error('No state found on the authentication response')
             return 'Bad request, no state found on the authentication response', 400
 
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(id=state).first()
