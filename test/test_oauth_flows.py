@@ -1,7 +1,11 @@
+import base64
+import string
 import time
+from hashlib import sha256
+from random import choice
+from unittest import mock
 from urllib.parse import urlencode
 from uuid import uuid4
-from unittest import mock
 
 import jwt
 import pytest
@@ -78,7 +82,7 @@ def smart_service_portal(portal_key: Key, portal_id: str):
 
 
 @pytest.fixture()
-def key() -> Key:
+def foreign_key() -> Key:
     key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
     key.check_key_op('sign')
     yield key
@@ -103,6 +107,18 @@ def portal_key() -> Key:
     key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
     key.check_key_op('sign')
     yield key
+
+
+@pytest.fixture()
+def code_verifier():
+    length = 128
+    letters = f'{string.ascii_letters}-._~'
+    return ''.join(choice(letters) for i in range(length))
+
+
+@pytest.fixture()
+def code_challenge(code_verifier):
+    return base64.b64encode(sha256(code_verifier.encode('ascii')).digest()).decode('ascii')
 
 
 def test_client_credentials_happy(testing_app: FlaskClient, foreign_key, client_key: Key, client_id: str,
@@ -154,19 +170,19 @@ def _test_authorization_code_happy_get(url, headers):
 
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
 @mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
-def test_authorization_code_happy(mock1, mock2, testing_app: FlaskClient, foreign_key,
-                                  client_key: Key,
-                                  portal_key: Key,
-                                  client_id: str,
-                                  portal_id: str,
-                                  user_id: str,
-                                  smart_service_client: SmartService,
-                                  smart_service_portal: SmartService):
+def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: FlaskClient, foreign_key,
+                                                   client_key: Key,
+                                                   portal_key: Key,
+                                                   client_id: str,
+                                                   portal_id: str,
+                                                   user_id: str,
+                                                   smart_service_client: SmartService,
+                                                   smart_service_portal: SmartService):
     state = str(uuid4())
     data = {'scope': 'scope',
             'redirect_uri': 'https://module.local./back',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
-            'client_id' : client_id,
+            'client_id': client_id,
             'launch': _hti_token(testing_app, portal_key, portal_id, user_id),
             'state': state}
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
@@ -179,6 +195,49 @@ def test_authorization_code_happy(mock1, mock2, testing_app: FlaskClient, foreig
             'client_assertion': _client_assertion(testing_app, client_key, client_id),
             'code': token_code,
             'state': token_state,
+            'redirect_uri': 'https://module.local./back',
+            'grant_type': 'authorization_code'}
+
+    rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})
+    assert rv.status_code == 200
+    response_data = rv.json
+    access_token = response_data.get('access_token')
+    assert access_token is not None
+    assert access_token == 'NOOP'
+
+
+@mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
+@mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
+def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: FlaskClient, foreign_key,
+                                                client_key: Key,
+                                                portal_key: Key,
+                                                client_id: str,
+                                                portal_id: str,
+                                                user_id: str,
+                                                code_challenge: str,
+                                                code_verifier: str,
+                                                smart_service_client: SmartService,
+                                                smart_service_portal: SmartService):
+    state = str(uuid4())
+    data = {'scope': 'scope',
+            'redirect_uri': 'https://module.local./back',
+            'code_challenge': code_challenge,
+            'code_challenge_method': 'S256',
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id),
+            'state': state}
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+    idp_code = str(uuid4())
+    idp_state = _get_params_from_redirect(authorize_resp, 'state')
+    redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
+    token_code, token_state = _get_params_from_redirect(redirect_resp, 'code', 'state')
+
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': _client_assertion(testing_app, client_key, client_id),
+            'code': token_code,
+            'state': token_state,
+            'code_verifier': code_verifier,
             'redirect_uri': 'https://module.local./back',
             'grant_type': 'authorization_code'}
 

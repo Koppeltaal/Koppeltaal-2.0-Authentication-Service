@@ -3,8 +3,10 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import base64
 import json
 import logging
+from hashlib import sha256
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -36,6 +38,8 @@ def create_blueprint() -> Blueprint:
         oauth_session = Oauth2Session()
         oauth_session.type = 'smart_hti_on_fhir'
         oauth_session.scope = request.values.get('scope')
+        oauth_session.code_challenge = request.values.get('code_challenge')
+        oauth_session.code_challenge_method = request.values.get('code_challenge_method')
         oauth_session.response_type = request.values.get('response_type')
         oauth_session.client_id = request.values.get('client_id')
         oauth_session.redirect_uri = request.values.get('redirect_uri')
@@ -116,6 +120,16 @@ def create_blueprint() -> Blueprint:
         else:
             logger.info(f"Invalid client_assertion_type received: {client_assertion_type}")
 
+    def _check_challenge(oauth2_session: Oauth2Session) -> bool:
+        if oauth2_session.code_challenge:
+            assert oauth2_session.code_challenge_method == 'S256'
+            code_verifier = request.values.get('code_verifier')
+            assert code_verifier is not None
+            expected_challenge = sha256(code_verifier.encode('ascii')).digest()
+            return base64.b64decode(oauth2_session.code_challenge.encode('ascii')) == expected_challenge
+
+        return True  # TODO: once implemented in all applications this should return false
+
     def _oauth2_token_task_to_json(oauth2_token: Oauth2Token, oauth2_session: Oauth2Session = None):
         rv = {'access_token': oauth2_token.access_token,
               "token_type": "Bearer",
@@ -151,6 +165,10 @@ def create_blueprint() -> Blueprint:
         assert redirect_uri == oauth2_session.redirect_uri
         assert oauth2_session.client_id == jwt['iss']
         assert oauth2_session.type == 'smart_hti_on_fhir'
+
+        if not _check_challenge(oauth2_session):
+            logger.info("Invalid challenge and verifier - returning access denied")
+            return 'Access Denied', 401
 
         return _oauth_token_smart_hti_on_fhir(oauth2_session)
 

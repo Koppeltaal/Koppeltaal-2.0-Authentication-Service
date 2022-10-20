@@ -15,6 +15,8 @@ class Oauth2Session(db.Model):
 
     type = db.Column(db.String(80)) # alter table oauth2_session add column type VARCHAR(80) default 'smart_backend'
     scope = db.Column(db.String(80))
+    code_challenge = db.Column(db.String(2048))
+    code_challenge_method = db.Column(db.String(128))
     response_type = db.Column(db.String(16))
     client_id = db.Column(db.String(80))
     redirect_uri = db.Column(db.String(128))
