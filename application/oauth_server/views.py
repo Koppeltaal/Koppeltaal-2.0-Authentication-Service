@@ -34,7 +34,7 @@ def create_blueprint() -> Blueprint:
         return f'Bad Request, assertion failed: {e}', 400
 
     @blueprint.route('/oauth2/authorize')
-    def authorize():
+    def handle_authorize_request():
         oauth_session = Oauth2Session()
         oauth_session.type = 'smart_hti_on_fhir'
         oauth_session.scope = request.values.get('scope')
@@ -66,17 +66,19 @@ def create_blueprint() -> Blueprint:
         return 'Bad Request, invalid launch token', 400
 
     @blueprint.route('/oauth2/token', methods=['POST', 'GET'])
-    def token():
-        grant_type = request.values.get('grant_type')
+    def handle_token_request():
+        jwt = _do_client_assertion()
+        if jwt:
+            grant_type = request.values.get('grant_type')
+            if grant_type == 'authorization_code':
+                return _token_authorization_code(jwt)
+            if grant_type == 'client_credentials':
+                return _token_client_credentials(jwt)
+            else:
+                return 'Bad Request', 400
 
-        if grant_type == 'authorization_code':
-            return token_authorization_code()
-        if grant_type == 'refresh_token':
-            return token_refresh_token()
-        if grant_type == 'client_credentials':
-            return token_client_credentials()
-        else:
-            return 'Bad Request', 400
+        logger.info("Invalid client credential request - returning access denied")
+        return 'Access Denied', 401
 
     @blueprint.route('/oauth2/introspect', methods=['POST'])
     def handle_introspect_request():
