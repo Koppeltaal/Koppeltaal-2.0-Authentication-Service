@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
 class GUID(TypeDecorator):
+    cache_ok = True
     """Platform-independent GUID type.
 
     Uses PostgreSQL's UUID type, otherwise uses

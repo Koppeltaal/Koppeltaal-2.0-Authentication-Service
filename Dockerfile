@@ -10,11 +10,11 @@ ADD instance /instance
 ADD application /application
 ADD .pylintrc /
 
-#ADD tests /tests
+ADD test /test
 
 ## Run pylint and tests
 #RUN pip install pylint && pylint entrypoint.py application/ && pip uninstall -y pylint
-#RUN pip install -r /requirements-test.txt && pytest --cov=application/ tests/ && pip uninstall -y -r /requirements-test.txt
+RUN pip install -r /requirements-test.txt && python -m pytest test/ && pip uninstall -y -r /requirements-test.txt
 
 ENV PORT "5000"
 

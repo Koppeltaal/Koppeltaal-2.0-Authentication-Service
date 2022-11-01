@@ -24,6 +24,7 @@ def testing_app(server_key: Key):
     private_key_bytes = get_private_key_as_pem(server_key)
 
     app = create_app({'TESTING': True,
+                      'SQLALCHEMY_TRACK_MODIFICATIONS' : False,
                       'SQLALCHEMY_DATABASE_URI': "sqlite:////tmp/test.db",
                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT': 'http://localhost:8080/endpoint',
                       'OIDC_JWT_EXP_TIME_ACCESS_TOKEN': 60,
