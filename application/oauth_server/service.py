@@ -256,7 +256,7 @@ class SmartHtiOnFhirService:
 
     def decode_with_jwks(self, smart_service, encoded_token):
 
-        jwks_client = PyJWKClient(smart_service.jwks_endpoint)
+        jwks_client = PyJWKClient(smart_service.jwks_endpoint, cache_keys=False) ## Caching does not respect the TTL,just has a number of keys
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config[
@@ -292,3 +292,8 @@ smart_hti_on_fhir_service = SmartHtiOnFhirService()
 token_service = TokenService()
 oauth2_client_credentials_service = Oauth2ClientCredentialsService()
 server_oauth2_service = ServerOauth2ClientCredentialsService()
+
+
+"""
+headease-koppeltaal-koppeltaal-2-0-smart-service-testsuite-staging.koppeltaal.headease.nl
+"""
