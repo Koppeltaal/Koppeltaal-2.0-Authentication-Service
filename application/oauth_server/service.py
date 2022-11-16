@@ -131,8 +131,8 @@ class Oauth2ClientCredentialsService:
             return
 
     def decode_with_jwks(self, smart_service, encoded_token) -> Dict[str, Any]:
-
-        jwks_client = PyJWKClient(smart_service.jwks_endpoint)
+        logger.info(f'Fetching endpoint: "{smart_service.jwks_endpoint}" for client_id: {smart_service.client_id}')
+        jwks_client = PyJWKClient(smart_service.jwks_endpoint, cache_keys=False)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config[
@@ -255,7 +255,7 @@ class SmartHtiOnFhirService:
             return
 
     def decode_with_jwks(self, smart_service, encoded_token):
-        logger.info(f'Fetching endpoint: {smart_service.jwks_endpoint} for client_id: {smart_service.client_id}')
+        logger.info(f'Fetching endpoint: "{smart_service.jwks_endpoint}" for client_id: {smart_service.client_id}')
         jwks_client = PyJWKClient(smart_service.jwks_endpoint, cache_keys=False)  ## Caching does not respect the TTL,just has a number of keys
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
