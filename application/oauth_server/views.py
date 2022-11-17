@@ -103,7 +103,8 @@ def create_blueprint() -> Blueprint:
             if iss == request.url_root:  # signed by self
                 decoded = server_oauth2_service.verify_and_get_token(token)
             else:
-                decoded = oauth2_client_credentials_service.verify_and_get_token(token)
+                expected_aud = jwt['iss']
+                decoded = oauth2_client_credentials_service.verify_and_get_token(token, expected_aud)
 
             if decoded:
                 # TODO: validate fields

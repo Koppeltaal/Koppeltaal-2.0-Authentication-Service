@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Dict
 from urllib.parse import urlparse, parse_qsl
 from uuid import uuid4
@@ -11,8 +12,11 @@ from application.utils import get_private_key_as_pem
 
 def _client_assertion(testing_app: FlaskClient, client_key: Key, client_id: str, extra_payload: Dict[str, str] = None):
     payload = {'iss': client_id,
-               'jti': str(uuid4()),
-               'aud': testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']}
+               'sub' : client_id,
+               'aud': testing_app.application.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT'],
+               'iat': datetime.now(),
+               'exp': datetime.now() + timedelta(minutes=5),
+               'jti': str(uuid4())}
     if extra_payload:
         payload.update(extra_payload)
     return jwt.encode(payload, get_private_key_as_pem(client_key), algorithm="RS512")
