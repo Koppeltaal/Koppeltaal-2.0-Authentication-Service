@@ -138,7 +138,7 @@ def test_introspect_client_fail_audience(testing_app: FlaskClient,
             'token': token}
     rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert 'active' in rv.json
-    assert not rv.json['active']
+    assert rv.json['active']
 
 
 def test_introspect_client_fail_exp(testing_app: FlaskClient, foreign_key, smart_service_foreign, smart_service_client, client_assertion):
