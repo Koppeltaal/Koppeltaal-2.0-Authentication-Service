@@ -79,7 +79,7 @@ class Oauth2ClientCredentialsService:
     """
     consumed_jti_tokens = []
 
-    def verify_and_get_token(self, encoded_token, expected_aud):
+    def verify_and_get_token(self, encoded_token):
 
         logger.debug(f'Received encoded token: {encoded_token}')
         try:
@@ -117,9 +117,9 @@ class Oauth2ClientCredentialsService:
 
         try:
             if smart_service.jwks_endpoint:
-                return self.decode_with_jwks(smart_service, encoded_token, expected_aud)
+                return self.decode_with_jwks(smart_service, encoded_token)
             elif smart_service.public_key:
-                return self.decode_with_public_key(smart_service, encoded_token, expected_aud)
+                return self.decode_with_public_key(smart_service, encoded_token)
             else:
                 logger.error(f"No JWKS or Public Key found on smart service with client_id {client_id}", )
         except InvalidSignatureError as ise:
@@ -130,17 +130,17 @@ class Oauth2ClientCredentialsService:
                 f"Something went wrong whilst trying to decode the JWT for client_id {client_id}, exception {e}")
             return
 
-    def decode_with_jwks(self, smart_service, encoded_token, expected_aud) -> Dict[str, Any]:
+    def decode_with_jwks(self, smart_service, encoded_token) -> Dict[str, Any]:
         logger.info(f'Fetching endpoint: "{smart_service.jwks_endpoint}" for client_id: {smart_service.client_id}')
         jwks_client = PyJWKClient(smart_service.jwks_endpoint, cache_keys=False)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                                   audience=expected_aud)
+                                   options={'verify_aud': False})
         logger.info(f'JWT for client_id {smart_service.client_id} is decoded by JWKS - valid key')
         return decoded_jwt
 
-    def decode_with_public_key(self, smart_service, encoded_token, expected_aud) -> Dict[str, Any]:
+    def decode_with_public_key(self, smart_service, encoded_token) -> Dict[str, Any]:
 
         public_key = smart_service.public_key
 
@@ -151,7 +151,7 @@ class Oauth2ClientCredentialsService:
 
         decoded_jwt = pyjwt.decode(encoded_token, public_key,
                                    algorithms=["RS512"],  ## TODO: check with spec
-                                   audience=expected_aud)
+                                   options={'verify_aud': False})
 
         logger.info(f'JWT for client_id {smart_service.client_id} is decoded by PUBLIC KEY - valid key')
         return decoded_jwt

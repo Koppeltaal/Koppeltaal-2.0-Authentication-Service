@@ -103,8 +103,7 @@ def create_blueprint() -> Blueprint:
             if iss == request.url_root:  # signed by self
                 decoded = server_oauth2_service.verify_and_get_token(token)
             else:
-                expected_aud = jwt['iss']
-                decoded = oauth2_client_credentials_service.verify_and_get_token(token, expected_aud)
+                decoded = oauth2_client_credentials_service.verify_and_get_token(token)
 
             if decoded:
                 # TODO: validate fields
@@ -119,9 +118,8 @@ def create_blueprint() -> Blueprint:
         client_assertion_type = request.values.get('client_assertion_type')
         # Check if the client_assertion_type is set correctly.
         if client_assertion_type == 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer':
-            expected_aud = current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']
             encoded_token = request.values.get('client_assertion')
-            return oauth2_client_credentials_service.verify_and_get_token(encoded_token, expected_aud)
+            return oauth2_client_credentials_service.verify_and_get_token(encoded_token)
         else:
             logger.info(f"Invalid client_assertion_type received: {client_assertion_type}")
 
