@@ -16,7 +16,8 @@ from encodings.base64_codec import base64_decode
 from flask import Blueprint, redirect, request, jsonify, current_app
 
 from application.database import db
-from application.oauth_server.model import Oauth2Session, Oauth2Token
+from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService
+from application.oauth_server.scopes import scope_service
 from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
     smart_hti_on_fhir_service, server_oauth2_service
 
@@ -207,11 +208,15 @@ def create_blueprint() -> Blueprint:
 
     # private_key_jwt flow https://hl7.org/fhir/uv/bulkdata/authorization/index.html#obtaining-an-access-token
     def _token_client_credentials(jwt):
-        logger.info(f"Generating OAuth access token for issuer {jwt['iss']}")
+        issuer = jwt['iss']
+        smart_service = SmartService.query.filter_by(client_id=issuer).first()
+        assert smart_service is not None
+        scope = scope_service.get_scope_str(smart_service.role_id, issuer) if smart_service.role_id else ''
+        logger.info(f"Generating OAuth access token for issuer {issuer} with scope {scope}")
         oauth2_token = Oauth2Token()
-        oauth2_token.client_id = jwt['iss']
-        oauth2_token.scope = request.form.get('scope')
-        oauth2_token.access_token = token_service.get_access_token(oauth2_token, request.form.get('scope'))
+        oauth2_token.client_id = issuer
+        oauth2_token.scope = scope
+        oauth2_token.access_token = token_service.get_access_token(oauth2_token, scope)
         # In the client_credentials flow, the refresh_token is not allowed
         # oauth2_token.refresh_token = token_service.get_refresh_token()
         db.session.add(oauth2_token)
