@@ -49,7 +49,7 @@ class ScopeService():
             permission_id=permission_id).all()
         for permissions_grant in permissions_grants:
             rv.append(permissions_grant.smart_service_id)
-        return rv
+        return ",".join(rv)
 
 
 scope_service = ScopeService()

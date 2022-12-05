@@ -16,7 +16,7 @@ from application.oauth_server.guid import GUID
 class Oauth2Session(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
 
-    type = db.Column(db.String(80)) # alter table oauth2_session add column type VARCHAR(80) default 'smart_backend'
+    type = db.Column(db.String(80))  # alter table oauth2_session add column type VARCHAR(80) default 'smart_backend'
     scope = db.Column(db.String(80))
     code_challenge = db.Column(db.String(2048))
     code_challenge_method = db.Column(db.String(128))
@@ -24,8 +24,8 @@ class Oauth2Session(db.Model):
     client_id = db.Column(db.String(80))
     redirect_uri = db.Column(db.String(128))
     state = db.Column(db.String(128))
-    launch = db.Column(db.Text()) # alter table oauth2_session modify column launch TEXT
-    aud = db.Column(db.String(128)) # alter table oauth2_session add column aud VARCHAR(255)
+    launch = db.Column(db.Text())  # alter table oauth2_session modify column launch TEXT
+    aud = db.Column(db.String(128))  # alter table oauth2_session add column aud VARCHAR(255)
 
     user_fhir_reference = db.Column(db.String(80))
     code = db.Column(db.String(80), unique=True, nullable=False)
@@ -69,6 +69,7 @@ class PermissionScope(str, Enum):
     ALL = 'ALL'
     OWN = 'OWN'
     GRANTED = 'GRANTED'
+
 
 class Role(db.Model):
     """
@@ -143,7 +144,6 @@ class Permission(db.Model):
     scope = db.Column(db.Enum(PermissionScope))
     role_id = db.Column(GUID(), ForeignKey("role.id"))
     role = relationship("Role")
-    grants = relationship("PermissionServiceGrant", back_populates="permission")
 
 
 class PermissionServiceGrant(db.Model):
