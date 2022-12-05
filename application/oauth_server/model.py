@@ -17,13 +17,13 @@ class Oauth2Session(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
 
     type = db.Column(db.String(80))  # alter table oauth2_session add column type VARCHAR(80) default 'smart_backend'
-    scope = db.Column(db.String(80))
-    code_challenge = db.Column(db.String(2048))
+    scope = db.Column(db.Text())
+    code_challenge = db.Column(db.Text())
     code_challenge_method = db.Column(db.String(128))
     response_type = db.Column(db.String(16))
     client_id = db.Column(db.String(80))
     redirect_uri = db.Column(db.String(128))
-    state = db.Column(db.String(128))
+    state = db.Column(db.Text())
     launch = db.Column(db.Text())  # alter table oauth2_session modify column launch TEXT
     aud = db.Column(db.String(128))  # alter table oauth2_session add column aud VARCHAR(255)
 
@@ -37,10 +37,10 @@ class Oauth2Session(db.Model):
 class Oauth2Token(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     client_id = db.Column(db.String(80))
-    access_token = db.Column(db.String(2048))
-    refresh_token = db.Column(db.String(2048))
+    access_token = db.Column(db.Text())
+    refresh_token = db.Column(db.Text())
     id_token = db.Column(db.String(2048))
-    scope = db.Column(db.String(128))
+    scope = db.Column(db.Text())
     subject = db.Column(db.String(128))
     session_id = db.Column(GUID(), db.ForeignKey(Oauth2Session.id))
 
