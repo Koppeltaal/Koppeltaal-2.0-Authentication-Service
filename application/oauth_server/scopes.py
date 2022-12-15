@@ -1,7 +1,8 @@
 from collections import defaultdict
 from typing import List
+from uuid import UUID
 
-from application.oauth_server.model import Permission, CrudOperation, PermissionServiceGrant
+from application.oauth_server.model import Permission, CrudOperation, PermissionServiceGrant, PermissionScope
 
 
 class ScopeService():
@@ -16,27 +17,45 @@ class ScopeService():
             rv += 'u'
         if CrudOperation.DELETE in operations:
             rv += 'd'
+        if CrudOperation.READ in operations:
+            rv += 's'
         return rv
 
     def get_scopes(self, role_id, own_device_id):
         permissions = Permission.query.filter_by(role_id=role_id).all()
         crud_map = defaultdict(list)
         for permission in permissions:
-            scope = permission.scope
-            if scope == 'ALL':
-                scope = '*'
-            elif scope == 'OWN':
-                scope = own_device_id
-            elif scope == 'GRANTED':
-                scope = self.get_granted(permission.id)
             operation: CrudOperation = permission.operation
-            crud_key = f"{scope}/{permission.resource_type}"
-            crud_map[crud_key].append(operation)
+            permission_scope: PermissionScope = permission.scope
+            resource_type = permission.resource_type
+            if permission_scope in {PermissionScope.ALL, PermissionScope.OWN}:
+                crud_map[f'{resource_type}🐍{permission_scope.value}'].append(operation)
+            else:
+                crud_map[f'{resource_type}🐍{permission_scope.value}🐍{permission.id}'].append(operation)
 
         rv = []
-        for key, value in crud_map.items():
-            action = self.get_crud_str(value)
-            rv.append(f"{key}.{action}")
+        for key, operations in crud_map.items():
+            fragments = key.split('🐍')
+            resource_type, scope = fragments[0], fragments[1]
+            if scope == 'ALL':
+                scope = ''
+            elif scope == 'OWN':
+                scope = f'Device/{own_device_id}'
+            elif scope == 'GRANTED':
+                permission_id =  fragments[2]
+                scope = self.get_granted(permission_id)
+                if len(scope) == 0:
+                    # No scope found, just stop here for this item
+                    continue
+
+            action = self.get_crud_str(operations)
+
+            permission_line = f"system/{resource_type}"
+            if len(action) > 0:
+                permission_line += f'.{action}'
+            if len(scope) > 0:
+                permission_line += f'?resource-origin={scope}'
+            rv.append(permission_line)
 
         return rv
 
@@ -48,8 +67,9 @@ class ScopeService():
         permissions_grants: List[PermissionServiceGrant] = PermissionServiceGrant.query.filter_by(
             permission_id=permission_id).all()
         for permissions_grant in permissions_grants:
-            rv.append(permissions_grant.smart_service_id)
-        return ",".join(rv)
+            rv.append(f'Device/{permissions_grant.smart_service_id}')
+
+        return ",".join([str(x) for x in rv])
 
 
 scope_service = ScopeService()

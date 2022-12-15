@@ -7,7 +7,6 @@ from enum import Enum
 from uuid import uuid4
 
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import relationship
 
 from application.database import db
 from application.oauth_server.guid import GUID
@@ -115,7 +114,6 @@ class SmartService(db.Model):
     status = db.Column(db.Enum(SmartServiceStatus))
     public_key = db.Column(db.String(255))
     role_id = db.Column(GUID(), ForeignKey(Role.id))
-    role = relationship("Role")
     name = db.Column(db.String(255))
     fhir_store_device_id = db.Column(db.String(255))
 
@@ -142,7 +140,8 @@ class Permission(db.Model):
     resource_type = db.Column(db.String(255))
     scope = db.Column(db.Enum(PermissionScope))
     role_id = db.Column(GUID(), ForeignKey("role.id"))
-    role = relationship("Role")
+    def __repr__(self):
+        return f'{self.resource_type}/{self.scope}.{self.operation}'
 
 
 class PermissionServiceGrant(db.Model):
