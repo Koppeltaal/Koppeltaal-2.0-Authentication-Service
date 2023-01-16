@@ -1,5 +1,5 @@
-import base64
 import logging
+from base64 import urlsafe_b64decode
 from hashlib import sha256
 from time import time
 from typing import Dict, Any
@@ -18,15 +18,20 @@ logger.setLevel(logging.DEBUG)
 
 consumed_jti_tokens = []
 
+
 class TokenAuthorizationCodeService:
-    def check_challenge(self, code_challenge: str, code_verifier:str, code_challenge_method:str) -> bool:
+    def check_challenge(self, code_challenge: str, code_verifier: str, code_challenge_method: str) -> bool:
         if code_challenge:
             assert code_challenge_method == 'S256'
             assert code_verifier is not None
             expected_challenge = sha256(code_verifier.encode('ascii')).digest()
-            return base64.b64decode(code_challenge.encode('ascii') + b'==') == expected_challenge
+            return self._base_64_url_decode(code_challenge.encode('ascii')) == expected_challenge
 
         return True  # TODO: once implemented in all applications this should return false
+
+    def _base_64_url_decode(self, base64Url):
+        padding = b'=' * (4 - (len(base64Url) % 4))
+        return urlsafe_b64decode(base64Url + padding)
 
 
 class TokenService:
@@ -265,7 +270,8 @@ class SmartHtiOnFhirService:
 
     def decode_with_jwks(self, smart_service, encoded_token):
         logger.info(f'Fetching endpoint: "{smart_service.jwks_endpoint}" for client_id: {smart_service.client_id}')
-        jwks_client = PyJWKClient(smart_service.jwks_endpoint, cache_keys=False)  ## Caching does not respect the TTL,just has a number of keys
+        jwks_client = PyJWKClient(smart_service.jwks_endpoint,
+                                  cache_keys=False)  ## Caching does not respect the TTL,just has a number of keys
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config[
