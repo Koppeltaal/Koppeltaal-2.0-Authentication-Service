@@ -25,3 +25,10 @@ def test_code_challenge_stripped(token_authorization_code_service):
 
         assert token_authorization_code_service.check_challenge(code_challenge, code, 'S256')
         code = code[:-1]
+
+
+def test_java_challenge(token_authorization_code_service):
+    codeVerifier = 'fygtVH1btwCabQq8h4XGd7ivxZNVPucHANVW4hhUbiU'
+    challenge = '3EKXXv90zoVx_SxRwqGM-g9Wek9wxZRocal6_mvCTQ4'
+
+    assert token_authorization_code_service.check_challenge(challenge, codeVerifier, 'S256')
