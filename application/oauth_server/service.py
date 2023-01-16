@@ -1,4 +1,6 @@
+import base64
 import logging
+from hashlib import sha256
 from time import time
 from typing import Dict, Any
 from uuid import uuid4
@@ -15,6 +17,17 @@ logger = logging.getLogger('oauth_service')
 logger.setLevel(logging.DEBUG)
 
 consumed_jti_tokens = []
+
+class TokenAuthorizationCodeService:
+    def check_challenge(self, code_challenge: str, code_verifier:str, code_challenge_method:str) -> bool:
+        if code_challenge:
+            assert code_challenge_method == 'S256'
+            assert code_verifier is not None
+            expected_challenge = sha256(code_verifier.encode('ascii')).digest()
+            return base64.b64decode(code_challenge.encode('ascii') + b'==') == expected_challenge
+
+        return True  # TODO: once implemented in all applications this should return false
+
 
 class TokenService:
     def get_id_token(self, oauth2_token: Oauth2Token) -> str:
@@ -288,7 +301,7 @@ smart_hti_on_fhir_service = SmartHtiOnFhirService()
 token_service = TokenService()
 oauth2_client_credentials_service = Oauth2ClientCredentialsService()
 server_oauth2_service = ServerOauth2ClientCredentialsService()
-
+token_authorization_code_service = TokenAuthorizationCodeService()
 
 """
 headease-koppeltaal-koppeltaal-2-0-smart-service-testsuite-staging.koppeltaal.headease.nl
