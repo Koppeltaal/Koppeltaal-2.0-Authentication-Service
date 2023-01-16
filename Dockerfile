@@ -22,5 +22,6 @@ EXPOSE 5000
 
 ENV IRMA_CLIENT_SERVER_URL "https://irma-auth.sns.gidsopenstandaarden.org/"
 ENV FLASK_ENV="production"
+ENV PYTHONUNBUFFERED=1
 
 ENTRYPOINT [ "python", "entrypoint.py"]
