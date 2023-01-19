@@ -30,6 +30,7 @@ def create_blueprint() -> Blueprint:
     @blueprint.errorhandler(AssertionError)
     def handle_assertionerror(e):
         print(f'Catching assertion error {e}, returning 400')
+        # TODO: In a live production environment, the exception should not be provided - helps in this PoC
         return f'Bad Request, assertion failed: {e}', 400
 
     @blueprint.route('/oauth2/authorize')
@@ -50,7 +51,7 @@ def create_blueprint() -> Blueprint:
         db.session.add(oauth_session)
         db.session.commit()
 
-        assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth_session.aud
+        assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth_session.aud, "Invalid audience"
         if smart_hti_on_fhir_service.validate_launch_token(oauth_session.launch):
             # If the JWT is valid, we have to verify that the launch token was not compromised by executing another
             # OIDC flow against the shared IDP. The user should already be logged in here, or a login will be
@@ -154,9 +155,9 @@ def create_blueprint() -> Blueprint:
         code = request.values.get('code')
         redirect_uri = request.values.get('redirect_uri')
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(code=code).first()
-        assert redirect_uri == oauth2_session.redirect_uri
-        assert oauth2_session.client_id == jwt['iss']
-        assert oauth2_session.type == 'smart_hti_on_fhir'
+        assert redirect_uri == oauth2_session.redirect_uri, f'Expected redirect_uri [{oauth2_session.redirect_uri}], got [{redirect_uri}] instead'
+        assert oauth2_session.client_id == jwt['iss'], f'Expected issuer [{oauth2_session.client_id}], got [{jwt["iss"]}] instead'
+        assert oauth2_session.type == 'smart_hti_on_fhir', f'Expected session type to be [smart_hti_on_fhir], its actually [{oauth2_session.type}]'
 
         if not token_authorization_code_service.check_challenge(oauth2_session.code_challenge, request.values.get('code_verifier'), oauth2_session.code_challenge_method):
             logger.info("Invalid challenge and verifier - returning access denied")
@@ -198,7 +199,7 @@ def create_blueprint() -> Blueprint:
     def _token_client_credentials(jwt):
         issuer = jwt['iss']
         smart_service = SmartService.query.filter_by(client_id=issuer).first()
-        assert smart_service is not None
+        assert smart_service is not None, f'Could not find SMART service with client_id [{issuer}]'
         scope = scope_service.get_scope_str(smart_service.role_id, issuer) if smart_service.role_id else ''
         logger.info(f"Generating OAuth access token for issuer {issuer} with scope {scope}")
         oauth2_token = Oauth2Token()
