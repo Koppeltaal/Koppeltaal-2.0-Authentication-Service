@@ -139,17 +139,33 @@ def create_blueprint() -> Blueprint:
 
         if oauth2_token.subject:
             subject: str = oauth2_token.subject
-            rv['user'] = subject
+            rv['sub'] = subject  ## Should be the same as the Task.for (1.1) or sub (1.2) fields.
 
-        body = _get_launch_token_body(oauth2_session)
-        if 'task' in body:
-            task = body['task']
+        hti_body = _get_launch_token_body(oauth2_session)
+        if 'task' in hti_body:  ## Check for HTI 1.1
+            task = hti_body['task']
             if 'id' in task:
-                rv['task'] = f'Task/{task["id"]}'
+                rv['resource'] = f'Task/{task["id"]}'
             if 'instantiatesCanonical' in task:
-                rv['activity'] = task['instantiatesCanonical']  ## TODO: chop whole URL?
+                rv['definition'] = task['instantiatesCanonical']  ## TODO: chop whole URL?
+            copy_value_if_exists('intend', task, rv)
+
+        else:  ## Assume HTI 1.2
+            copy_value_if_exists('resource', hti_body, rv)  # AKA Task
+            copy_value_if_exists('definition', hti_body, rv)  # AKA TaskDefinition
+            copy_value_if_exists('patient', hti_body, rv)  # In case of a launch on behalf: the patient
+            copy_value_if_exists('intent', hti_body, rv)
+
+            copy_value_if_exists('aud', hti_body, rv)
+            copy_value_if_exists('iss', hti_body, rv)
+            copy_value_if_exists('exp', hti_body, rv)
+            copy_value_if_exists('jti', hti_body, rv)
 
         return rv
+
+    def copy_value_if_exists(field, source, target):
+        if field in source:
+            target[field] = source[field]
 
     def _token_authorization_code(jwt):
         code = request.values.get('code')
@@ -159,7 +175,9 @@ def create_blueprint() -> Blueprint:
         assert oauth2_session.client_id == jwt['iss'], f'Expected issuer [{oauth2_session.client_id}], got [{jwt["iss"]}] instead'
         assert oauth2_session.type == 'smart_hti_on_fhir', f'Expected session type to be [smart_hti_on_fhir], its actually [{oauth2_session.type}]'
 
-        if not token_authorization_code_service.check_challenge(oauth2_session.code_challenge, request.values.get('code_verifier'), oauth2_session.code_challenge_method):
+        if not token_authorization_code_service.check_challenge(oauth2_session.code_challenge,
+                                                                request.values.get('code_verifier'),
+                                                                oauth2_session.code_challenge_method):
             logger.info("Invalid challenge and verifier - returning access denied")
             return 'Access Denied', 401
 
