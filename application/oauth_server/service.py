@@ -65,7 +65,7 @@ class TokenService:
             'aud': aud,
             'nbf': int(time()),
             'exp': int(time() + expiry),
-            'nonce': str(uuid4())}
+            'jti': str(uuid4())}
         if type is not None:
             payload['type'] = type
 
