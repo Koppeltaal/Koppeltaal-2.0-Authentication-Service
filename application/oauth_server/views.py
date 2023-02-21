@@ -150,7 +150,7 @@ def create_blueprint() -> Blueprint:
                 rv['definition'] = task['instantiatesCanonical']  ## TODO: chop whole URL?
             copy_value_if_exists('intend', task, rv)
 
-        else:  ## Assume HTI 1.2
+        else:  ## Assume HTI 2.0
             copy_value_if_exists('resource', hti_body, rv)  # AKA Task
             copy_value_if_exists('definition', hti_body, rv)  # AKA TaskDefinition
             copy_value_if_exists('patient', hti_body, rv)  # In case of a launch on behalf: the patient

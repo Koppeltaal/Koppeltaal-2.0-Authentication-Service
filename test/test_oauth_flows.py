@@ -55,8 +55,17 @@ def portal_id():
 
 @pytest.fixture()
 def user_id():
-    return str(uuid4())
+    return f'Practitioner/{str(uuid4())}'
 
+
+@pytest.fixture()
+def patient_id():
+    return f'Patient/{str(uuid4())}'
+
+
+@pytest.fixture()
+def resource_id():
+    return f'Task/{str(uuid4())}'
 
 @pytest.fixture()
 def smart_service_client(testing_app: FlaskClient, client_key: Key, client_id: str):
@@ -177,6 +186,8 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
                                                    client_id: str,
                                                    portal_id: str,
                                                    user_id: str,
+                                                   patient_id: str,
+                                                   resource_id: str,
                                                    smart_service_client: SmartService,
                                                    smart_service_portal: SmartService):
     state = str(uuid4())
@@ -184,7 +195,7 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
             'redirect_uri': 'https://module.local./back',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
             'state': state}
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
     idp_code = str(uuid4())
@@ -205,6 +216,9 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
     access_token = response_data.get('access_token')
     assert access_token is not None
     assert access_token == 'NOOP'
+    assert response_data['sub'] == user_id
+    assert response_data['patient'] == patient_id
+    assert response_data['resource'] == resource_id
 
 
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
@@ -215,6 +229,8 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
                                                 client_id: str,
                                                 portal_id: str,
                                                 user_id: str,
+                                                patient_id: str,
+                                                resource_id: str,
                                                 code_challenge: str,
                                                 code_verifier: str,
                                                 smart_service_client: SmartService,
@@ -226,7 +242,7 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
             'code_challenge_method': 'S256',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
             'state': state}
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
     idp_code = str(uuid4())
@@ -248,6 +264,9 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
     access_token = response_data.get('access_token')
     assert access_token is not None
     assert access_token == 'NOOP'
+    assert response_data['sub'] == user_id
+    assert response_data['patient'] == patient_id
+    assert response_data['resource'] == resource_id
 
 
 def test_client_credentials_exp(testing_app: FlaskClient, foreign_key, client_key: Key, client_id: str,
