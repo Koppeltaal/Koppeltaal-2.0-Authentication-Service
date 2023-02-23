@@ -60,7 +60,7 @@ SQLALCHEMY_DATABASE_URI = envget_str('SQLALCHEMY_DATABASE_URI', "sqlite:////tmp/
 SQLALCHEMY_TRACK_MODIFICATIONS = envget_bool('SQLALCHEMY_TRACK_MODIFICATIONS', False)
 OIDC_JWT_PUBLIC_KEY = envget_str('OIDC_JWT_PUBLIC_KEY', '')
 OIDC_JWT_PRIVATE_KEY = envget_str('OIDC_JWT_PRIVATE_KEY', '')
-OIDC_JWT_EXP_TIME_ACCESS_TOKEN = envget_int('OIDC_JWT_EXP_TIME_ACCESS_TOKEN', 60)
+OIDC_JWT_EXP_TIME_ACCESS_TOKEN = envget_int('OIDC_JWT_EXP_TIME_ACCESS_TOKEN', 300)
 
 # IdP is used to retrieve the id_token of the logged-in user
 IDP_AUTHORIZE_ENDPOINT = envget_str('IDP_AUTHORIZE_ENDPOINT', 'https://iam.koppeltaal.headease.nl/auth/realms/Koppeltaal2/protocol/openid-connect/auth')
