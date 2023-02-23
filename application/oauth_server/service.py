@@ -63,6 +63,7 @@ class TokenService:
         payload = {
             'iss': request.url_root,
             'aud': aud,
+            'iat': int(time()),
             'nbf': int(time()),
             'exp': int(time() + expiry),
             'jti': str(uuid4())}
