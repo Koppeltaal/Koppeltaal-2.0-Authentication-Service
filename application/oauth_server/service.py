@@ -8,9 +8,10 @@ from uuid import uuid4
 import jwt as pyjwt
 from authlib.jose import jwt
 from flask import request, current_app
-from jwt import PyJWKClient, InvalidSignatureError, DecodeError
+from jwt import InvalidSignatureError, DecodeError
 
 from application.jwks.service import keypair_service
+from application.oauth_server.jwks_client import CacheHeaderPyJWKClient
 from application.oauth_server.model import Oauth2Token, SmartService, SmartServiceStatus
 
 logger = logging.getLogger('oauth_service')
@@ -151,7 +152,7 @@ class Oauth2ClientCredentialsService:
 
     def decode_with_jwks(self, smart_service, encoded_token) -> Dict[str, Any]:
         logger.info(f'Fetching endpoint: "{smart_service.jwks_endpoint}" for client_id: {smart_service.client_id}')
-        jwks_client = PyJWKClient(smart_service.jwks_endpoint, cache_keys=False)
+        jwks_client = CacheHeaderPyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
@@ -271,8 +272,7 @@ class SmartHtiOnFhirService:
 
     def decode_with_jwks(self, smart_service, encoded_token):
         logger.info(f'Fetching endpoint: "{smart_service.jwks_endpoint}" for client_id: {smart_service.client_id}')
-        jwks_client = PyJWKClient(smart_service.jwks_endpoint,
-                                  cache_keys=False)  ## Caching does not respect the TTL,just has a number of keys
+        jwks_client = CacheHeaderPyJWKClient(smart_service.jwks_endpoint)
         signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
         decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                    algorithms=current_app.config[

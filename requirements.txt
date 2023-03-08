@@ -10,4 +10,5 @@ flask_behind_proxy==0.1.1
 basicauth==0.4.1
 psycopg2==2.9.5
 pymysql==1.0.2
-PyJWT==2.3.0
+PyJWT==2.6.0
+requests-cache==1.0.0
