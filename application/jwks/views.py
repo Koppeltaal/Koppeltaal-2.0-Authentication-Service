@@ -8,12 +8,14 @@ from authlib.jose import KeySet, Key
 from flask import Blueprint, current_app, jsonify, abort
 
 from application.jwks.service import keypair_service
+from application.utils import oidc_smart_config_cached
 
 
 def create_blueprint() -> Blueprint:
     blueprint = Blueprint(__name__.split('.')[-2], __name__)
 
     @blueprint.route('/.well-known/jwks.json')
+    @oidc_smart_config_cached()
     def jwks():
         key: Key = keypair_service.get_public_key()
         key_set: KeySet = KeySet([key])
@@ -21,6 +23,7 @@ def create_blueprint() -> Blueprint:
         return jsonify(key_set.as_dict())
 
     @blueprint.route('/.well-known/smart-configuration', methods=['GET'])
+    @oidc_smart_config_cached()
     def smart_configuration():
         if (not current_app.config['OIDC_SMART_CONFIG_ENABLED']):
             abort(404)
