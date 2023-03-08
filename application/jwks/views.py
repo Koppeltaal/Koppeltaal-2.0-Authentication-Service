@@ -5,7 +5,7 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 from authlib.jose import KeySet, Key
-from flask import Blueprint, current_app, jsonify, abort
+from flask import Blueprint, current_app, jsonify, abort, request
 
 from application.jwks.service import keypair_service
 from application.utils import oidc_smart_config_cached
@@ -29,10 +29,18 @@ def create_blueprint() -> Blueprint:
             abort(404)
 
         return jsonify(
-            token_endpoint=(current_app.config['OIDC_SMART_CONFIG_TOKEN_ENDPOINT']),
-            token_endpoint_auth_methods_supported=(current_app.config['OIDC_SMART_CONFIG_AUTH_METHODS']),
-            token_endpoint_auth_signing_alg_values_supported=(current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS']),
-            scopes_supported=(current_app.config['OIDC_SMART_CONFIG_SCOPES']),
-            registration_endpoint=(current_app.config['OIDC_SMART_CONFIG_REGISTRATION_ENDPOINT']))
+            issuer=request.url_root,
+            jwks_uri=f'{request.host_url}.well-known/jwks.json',
+            authorization_endpoint=f'{request.host_url}oauth2/authorize',
+            grant_types_supported=['authorization_code', 'client_credentials'],
+            token_endpoint=f'{request.host_url}oauth2/token',
+            token_endpoint_auth_methods_supported=['private_key_jwt'],
+            scopes_supported=["openid", "launch", "fhirUser", "system/*.cruds", "system/*.cruds?resource-origin="],
+            response_types_supported=['code'],
+            management_endpoint=current_app.config['OIDC_SMART_CONFIG_MANAGEMENT_ENDPOINT'],
+            introspection_endpoint=f'{request.host_url}oauth2/introspect',
+            capabilities=['launch-ehr', 'authorize-post', 'client-confidential-asymmetric', 'sso-openid-connect',
+                          'context-ehr-hti', 'permission-v2'],
+            code_challenge_methods_supported=['S256'])
 
     return blueprint
