@@ -25,7 +25,9 @@ def create_blueprint() -> Blueprint:
     @blueprint.route('/.well-known/smart-configuration', methods=['GET'])
     @oidc_smart_config_cached()
     def smart_configuration():
-        if (not current_app.config['OIDC_SMART_CONFIG_ENABLED']):
+        # The current reference implementation uses the FHIR HAPI
+        # server to expose this endpoint, however
+        if not current_app.config.get('OIDC_SMART_CONFIG_ENABLED', False):
             abort(404)
 
         return jsonify(
