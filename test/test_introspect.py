@@ -1,9 +1,7 @@
-import time
 from uuid import uuid4
 
 import pytest
 from authlib.jose import JsonWebKey, Key, JsonWebToken
-from cryptography.hazmat.primitives import serialization
 from flask.testing import FlaskClient
 
 from application import create_app
@@ -11,6 +9,7 @@ from application.database import db
 from application.oauth_server.model import SmartService, SmartServiceStatus
 from application.utils import get_private_key_as_pem, get_public_key_as_pem
 from utils import _client_assertion
+from utils import get_now
 
 
 @pytest.fixture()
@@ -99,8 +98,8 @@ def test_introspect_client_happy(testing_app: FlaskClient,
     payload = {
         "sub": "1234567890",
         "name": "John Doe",
-        "iat": time.time(),
-        "exp": time.time() + 1000,
+        "iat": get_now(),
+        "exp": get_now(300),
         "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
         "aud": smart_service_client.client_id
@@ -125,8 +124,8 @@ def test_introspect_client_fail_audience(testing_app: FlaskClient,
     payload = {
         "sub": "1234567890",
         "name": "John Doe",
-        "iat": time.time(),
-        "exp": time.time() + 1000,
+        "iat": get_now(),
+        "exp": get_now(300),
         "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
         "aud": 'faalhaas'
@@ -149,8 +148,8 @@ def test_introspect_client_fail_exp(testing_app: FlaskClient, foreign_key, smart
     payload = {
         "sub": "1234567890",
         "name": "John Doe",
-        "iat": time.time(),
-        "exp": time.time() - 1000,
+        "iat": get_now(),
+        "exp": get_now(-1000),
         "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
         "aud": smart_service_client.client_id
@@ -174,8 +173,8 @@ def test_introspect_client_fail_iss(testing_app: FlaskClient, foreign_key, smart
     payload = {
         "sub": "1234567890",
         "name": "John Doe",
-        "iat": time.time(),
-        "exp": time.time() - 1000,
+        "iat": get_now(),
+        "exp": get_now(-1000),
         "jti": str(uuid4()),
         "aud": smart_service_client.client_id
     }
@@ -199,8 +198,8 @@ def test_introspect_client_fail_enc(testing_app: FlaskClient, foreign_key: Key, 
     payload = {
         "sub": "1234567890",
         "name": "John Doe",
-        "iat": time.time(),
-        "exp": time.time() + 1000,
+        "iat": get_now(),
+        "exp": get_now(300),
         "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
         "aud": smart_service_client.client_id
@@ -224,8 +223,8 @@ def test_introspect_server_fail_exp(testing_app: FlaskClient, server_key: Key, s
     payload = {
         "sub": "1234567890",
         "name": "John Doe",
-        "iat": time.time(),
-        "exp": time.time() - 1000,
+        "iat": get_now(),
+        "exp": get_now(-1000),
         "iss": 'http://localhost/',
         "jti": str(uuid4()),
         "aud": smart_service_client.client_id

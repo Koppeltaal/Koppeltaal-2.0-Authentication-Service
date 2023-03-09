@@ -1,7 +1,8 @@
 import logging
 from base64 import urlsafe_b64decode
+from calendar import timegm
+from datetime import datetime, timezone
 from hashlib import sha256
-from time import time
 from typing import Dict, Any
 from uuid import uuid4
 
@@ -19,6 +20,9 @@ logger.setLevel(logging.DEBUG)
 
 consumed_jti_tokens = []
 
+
+def get_timestamp_now():
+    return timegm(datetime.now(tz=timezone.utc).utctimetuple())
 
 class TokenAuthorizationCodeService:
     def check_challenge(self, code_challenge: str, code_verifier: str, code_challenge_method: str) -> bool:
@@ -61,12 +65,13 @@ class TokenService:
     def _get_jwt_token(self, expiry: int, aud: str, type: str = None, sub: str = None, email: str = None,
                        given_name: str = None, family_name: str = None, scope: str = None, azp: str = None) -> str:
         private_key, public_key = keypair_service.get_keypair()
+        now = get_timestamp_now()
         payload = {
             'iss': request.url_root,
             'aud': aud,
-            'iat': int(time()),
-            'nbf': int(time()),
-            'exp': int(time() + expiry),
+            'iat': now,
+            'nbf': now,
+            'exp': now + expiry,
             'jti': str(uuid4())}
         if type is not None:
             payload['type'] = type
