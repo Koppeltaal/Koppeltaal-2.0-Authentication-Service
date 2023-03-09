@@ -72,7 +72,7 @@ IDP_AUTHORIZE_REDIRECT_URL = envget_str('IDP_AUTHORIZE_REDIRECT_URL', 'http://lo
 SMART_BACKEND_SERVICE_CLIENT_ID = envget_str('SMART_BACKEND_SERVICE_CLIENT_ID', 'd44ba2e2-4762-465f-b825-d2b291d07db6')
 
 # https://hl7.org/fhir/uv/bulkdata/authorization/index.html#advertising-server-conformance-with-smart-backend-services
-OIDC_SMART_CONFIG_ENABLED = envget_bool('OIDC_SMART_CONFIG_ENABLED', True)
+OIDC_SMART_CONFIG_ENABLED = envget_bool('OIDC_SMART_CONFIG_ENABLED', False)
 OIDC_SMART_CONFIG_CACHING_SECONDS = envget_int('OIDC_SMART_CONFIG_CACHING_SECONDS', 30)
 OIDC_SMART_CONFIG_MANAGEMENT_ENDPOINT = envget_str('OIDC_SMART_CONFIG_MANAGEMENT_ENDPOINT', '[not configured]')
 
