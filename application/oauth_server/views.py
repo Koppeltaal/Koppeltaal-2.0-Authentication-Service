@@ -56,6 +56,7 @@ def create_blueprint() -> Blueprint:
             # If the JWT is valid, we have to verify that the launch token was not compromised by executing another
             # OIDC flow against the shared IDP. The user should already be logged in here, or a login will be
             # prompted. The username has to be present as a Patient.identifier
+            ## TODO: CHECK IF THE SCOPE IS SET TO "openid fhirUser" or not.
             parameters = {"response_type": "code",
                           "client_id": current_app.config["IDP_AUTHORIZE_CLIENT_ID"],
                           "state": oauth_session.id,
