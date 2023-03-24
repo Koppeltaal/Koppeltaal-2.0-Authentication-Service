@@ -1,18 +1,21 @@
+---
 name: Docker Image CI
-
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - master
   pull_request:
-    branches: [ "master" ]
-
+    branches:
+      - master
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag kt2-auth-service:$(date +%s) --tag kt2-auth-service:latest
+      - uses: actions/checkout@v3
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v4.0.0
+        with:
+          push: true
+          tags: |
+            kt2-auth-service:$(date +%s)
+            kt2-auth-service:latest
