@@ -25,5 +25,5 @@ jobs:
         with:
           push: true
           tags: |
-            kt2-auth-service:${{ steps.date.outputs.date }}
-            kt2-auth-service:latest
+            jorisheadease/kt2-auth-service:${{ steps.date.outputs.date }}
+            jorisheadease/kt2-auth-service:latest
