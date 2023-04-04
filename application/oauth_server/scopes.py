@@ -1,8 +1,8 @@
 from collections import defaultdict
 from typing import List
-from uuid import UUID
 
-from application.oauth_server.model import Permission, CrudOperation, PermissionServiceGrant, PermissionScope
+from application.oauth_server.model import Permission, CrudOperation, PermissionServiceGrant, PermissionScope, \
+    SmartService
 
 
 class ScopeService():
@@ -42,7 +42,7 @@ class ScopeService():
             elif scope == 'OWN':
                 scope = f'Device/{own_device_id}'
             elif scope == 'GRANTED':
-                permission_id =  fragments[2]
+                permission_id = fragments[2]
                 scope = self.get_granted(permission_id)
                 if len(scope) == 0:
                     # No scope found, just stop here for this item
@@ -67,7 +67,8 @@ class ScopeService():
         permissions_grants: List[PermissionServiceGrant] = PermissionServiceGrant.query.filter_by(
             permission_id=permission_id).all()
         for permissions_grant in permissions_grants:
-            rv.append(f'Device/{permissions_grant.smart_service_id}')
+            smart_service = SmartService.query.filter_by(id=permissions_grant.smart_service_id).first()
+            rv.append(f'Device/{smart_service.fhir_store_device_id}')
 
         return ",".join([str(x) for x in rv])
 
