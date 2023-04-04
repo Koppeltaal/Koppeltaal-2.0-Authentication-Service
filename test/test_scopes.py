@@ -141,7 +141,7 @@ def test_happy(testing_app, smart_service_role: Role, own_device_id, permissions
     assert 'system/RelatedPerson.rs' in scopes
     assert f'system/RelatedPerson.crus?resource-origin=Device/{own_device_id}' in scopes
     assert f'system/Task.crus?resource-origin=Device/{own_device_id}' in scopes
-    assert f'system/Task.rs?resource-origin=Device/{smart_service_other.id}' in scopes
+    assert f'system/Task.rs?resource-origin=Device/{smart_service_other.fhir_store_device_id}' in scopes
 
 
 def test_unk(testing_app):
