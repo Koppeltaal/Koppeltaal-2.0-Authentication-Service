@@ -3,7 +3,7 @@ from base64 import urlsafe_b64decode
 from calendar import timegm
 from datetime import datetime, timezone
 from hashlib import sha256
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from uuid import uuid4
 
 import jwt as pyjwt
@@ -20,6 +20,8 @@ logger.setLevel(logging.DEBUG)
 
 consumed_jti_tokens = []
 
+LAUNCH_SCOPE_DEFAULT = 'launch openid fhirUser'
+LAUNCH_SCOPE_ALLOWED = [['launch'], ['launch', 'openid', 'fhirUser']]
 
 def get_timestamp_now():
     return timegm(datetime.now(tz=timezone.utc).utctimetuple())
@@ -240,7 +242,17 @@ class SmartHtiOnFhirService:
     def __init__(self):
         pass
 
-    def validate_launch_token(self, encoded_token: str):
+    @staticmethod
+    def validate_and_parse_launch_scope(scope:str, encoded_token: str):
+        scopes = scope.split()
+        for allowed_set in LAUNCH_SCOPE_ALLOWED:
+            if set(allowed_set) == set(scopes):
+                return scopes
+
+        return None
+
+
+    def validate_launch_token(self, encoded_token: str) -> Optional[Dict[str, Any]]:
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
         issuer = unverified_decoded_jwt['iss']
 

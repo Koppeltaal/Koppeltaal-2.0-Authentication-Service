@@ -73,7 +73,8 @@ def smart_service_client(testing_app: FlaskClient, client_key: Key, client_id: s
     smart_service_client = SmartService(created_by='admin',
                                         client_id=client_id,
                                         status=SmartServiceStatus.APPROVED,
-                                        public_key=public_key_bytes.decode('utf8'))
+                                        public_key=public_key_bytes.decode('utf8'),
+                                        fhir_store_device_id=str(uuid4()))
     db.session.add(smart_service_client)
     db.session.commit()
     yield smart_service_client
@@ -191,7 +192,7 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
                                                    smart_service_client: SmartService,
                                                    smart_service_portal: SmartService):
     state = str(uuid4())
-    data = {'scope': 'scope',
+    data = {'scope': 'launch fhirUser openid',
             'redirect_uri': 'https://module.local./back',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': client_id,
@@ -236,7 +237,7 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
                                                 smart_service_client: SmartService,
                                                 smart_service_portal: SmartService):
     state = str(uuid4())
-    data = {'scope': 'scope',
+    data = {'scope': 'launch fhirUser openid',
             'redirect_uri': 'https://module.local./back',
             'code_challenge': code_challenge,
             'code_challenge_method': 'S256',

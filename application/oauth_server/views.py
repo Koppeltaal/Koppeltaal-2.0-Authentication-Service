@@ -17,9 +17,8 @@ from application.database import db
 from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService
 from application.oauth_server.scopes import scope_service
 from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
-    smart_hti_on_fhir_service, server_oauth2_service, token_authorization_code_service
+    smart_hti_on_fhir_service, server_oauth2_service, token_authorization_code_service, LAUNCH_SCOPE_DEFAULT
 
-DEFAULT_SCOPE = '*/write'
 logger = logging.getLogger('oauth_views')
 logger.setLevel(logging.DEBUG)
 
@@ -35,35 +34,43 @@ def create_blueprint() -> Blueprint:
 
     @blueprint.route('/oauth2/authorize')
     def handle_authorize_request():
-        oauth_session = Oauth2Session()
-        oauth_session.type = 'smart_hti_on_fhir'
-        oauth_session.scope = request.values.get('scope')
-        oauth_session.code_challenge = request.values.get('code_challenge')
-        oauth_session.code_challenge_method = request.values.get('code_challenge_method')
-        oauth_session.response_type = request.values.get('response_type')
-        oauth_session.client_id = request.values.get('client_id')
-        oauth_session.redirect_uri = request.values.get('redirect_uri')
-        oauth_session.state = request.values.get('state')
-        oauth_session.launch = request.values.get('launch', None)
-        oauth_session.aud = request.values.get('aud', None)
-        oauth_session.code = str(uuid4())
+        oauth2_session = Oauth2Session()
+        oauth2_session.type = 'smart_hti_on_fhir'
+        scope = request.values.get('scope', LAUNCH_SCOPE_DEFAULT)
+        oauth2_session.scope = scope
+        oauth2_session.code_challenge = request.values.get('code_challenge')
+        oauth2_session.code_challenge_method = request.values.get('code_challenge_method')
+        oauth2_session.response_type = request.values.get('response_type')
+        oauth2_session.client_id = request.values.get('client_id')
+        oauth2_session.redirect_uri = request.values.get('redirect_uri')
+        oauth2_session.state = request.values.get('state')
+        oauth2_session.launch = request.values.get('launch', None)
+        oauth2_session.aud = request.values.get('aud', None)
+        oauth2_session.code = str(uuid4())
 
-        db.session.add(oauth_session)
+        db.session.add(oauth2_session)
         db.session.commit()
 
-        assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth_session.aud, "Invalid audience"
-        if smart_hti_on_fhir_service.validate_launch_token(oauth_session.launch):
+        assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth2_session.aud, "Invalid audience"
+        launch_token = smart_hti_on_fhir_service.validate_launch_token(oauth2_session.launch)
+        if launch_token:
             # If the JWT is valid, we have to verify that the launch token was not compromised by executing another
             # OIDC flow against the shared IDP. The user should already be logged in here, or a login will be
             # prompted. The username has to be present as a Patient.identifier
-            ## TODO: CHECK IF THE SCOPE IS SET TO "openid fhirUser" or not.
-            parameters = {"response_type": "code",
-                          "client_id": current_app.config["IDP_AUTHORIZE_CLIENT_ID"],
-                          "state": oauth_session.id,
-                          "redirect_uri": current_app.config["IDP_AUTHORIZE_REDIRECT_URL"],
-                          "scope": "openid",
-                          "login": "true"}
-            return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
+            scopes = smart_hti_on_fhir_service.validate_and_parse_launch_scope(scope, launch_token)
+            if not scopes:
+                return 'Bad Request, invalid scope', 400
+            if 'openid' in scopes:
+                parameters = {"response_type": "code",
+                              "client_id": current_app.config["IDP_AUTHORIZE_CLIENT_ID"],
+                              "state": oauth2_session.id,
+                              "redirect_uri": current_app.config["IDP_AUTHORIZE_REDIRECT_URL"],
+                              "scope": "openid",
+                              "login": "true"}
+                return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
+            else:
+                return redirect(
+                    f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}')
         return 'Bad Request, invalid launch token', 400
 
     @blueprint.route('/oauth2/token', methods=['POST', 'GET'])
