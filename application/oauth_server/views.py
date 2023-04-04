@@ -217,9 +217,9 @@ def create_blueprint() -> Blueprint:
     # private_key_jwt flow https://hl7.org/fhir/uv/bulkdata/authorization/index.html#obtaining-an-access-token
     def _token_client_credentials(jwt):
         issuer = jwt['iss']
-        smart_service = SmartService.query.filter_by(client_id=issuer).first()
+        smart_service: SmartService = SmartService.query.filter_by(client_id=issuer).first()
         assert smart_service is not None, f'Could not find SMART service with client_id [{issuer}]'
-        scope = scope_service.get_scope_str(smart_service.role_id, issuer) if smart_service.role_id else ''
+        scope = scope_service.get_scope_str(smart_service.role_id, smart_service.fhir_store_device_id) if smart_service.role_id else ''
         logger.info(f"Generating OAuth access token for issuer {issuer} with scope {scope}")
         oauth2_token = Oauth2Token()
         oauth2_token.client_id = issuer
