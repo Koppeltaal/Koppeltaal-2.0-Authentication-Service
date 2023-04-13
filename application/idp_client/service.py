@@ -68,7 +68,7 @@ class IdpService:
         logger.debug(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{hti_launch_token["sub"]}]\n\nuser: {str(launching_user_resource)}')
 
         identifiers = launching_user_resource['identifier']
-        values = list(map(lambda identifier: identifier['value'] if 'value' in identifier else "", identifiers))
+        values = [identifier['value'] for identifier in identifiers if 'value' in identifier]
         if email not in values:
             logger.error(f'[{oauth2_session.id}] user id mismatch, expected [{email}] but found {str(values)}')
             return 'Forbidden, patient email not found on Patient resource', 403
