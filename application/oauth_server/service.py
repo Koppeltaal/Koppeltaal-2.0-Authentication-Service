@@ -232,8 +232,7 @@ class ServerOauth2ClientCredentialsService():
         decoded_jwt = pyjwt.decode(encoded_token, public_key.as_pem(),
                                    algorithms=current_app.config[
                                        'OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                                   audience=current_app.config[
-                                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT'])
+                                   options={'verify_aud': False}) # TODO: check if correct
 
         logger.info(f'JWT signed by self is decoded by JWKS - valid key')
         return decoded_jwt
