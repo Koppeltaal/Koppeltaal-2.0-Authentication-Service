@@ -87,24 +87,37 @@ class Role(db.Model):
 
 class SmartService(db.Model):
     """
-    CREATE TABLE `smart_service` (
-      `id` char(36) NOT NULL,
-      `created_by` varchar(255) DEFAULT NULL,
-      `created_on` datetime DEFAULT NULL,
-      `client_id` varchar(255) DEFAULT NULL,
-      `jwks_endpoint` varchar(255) DEFAULT NULL,
-      `status` varchar(255) DEFAULT NULL,
-      `public_key` varchar(512) DEFAULT NULL,
-      `role_id` char(36) DEFAULT NULL,
-      `name` varchar(255) DEFAULT NULL,
-      `fhir_store_device_id` varchar(255) DEFAULT NULL,
-      PRIMARY KEY (`id`),
-      UNIQUE KEY `unique_jwks_endpoint` (`jwks_endpoint`),
-      UNIQUE KEY `client_id_index` (`client_id`),
-      UNIQUE KEY `unique_public_key` (`public_key`),
-      KEY `FKcosi5jmx6d18vmwqhv2h3gmr0` (`role_id`),
-      CONSTRAINT `FKcosi5jmx6d18vmwqhv2h3gmr0` FOREIGN KEY (`role_id`) REFERENCES `role` (`id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+    CREATE TABLE IF NOT EXISTS public.smart_service
+(
+    id uuid NOT NULL,
+    created_by character varying(255) COLLATE pg_catalog."default",
+    created_on timestamp without time zone,
+    client_id character varying(255) COLLATE pg_catalog."default",
+    fhir_store_device_id character varying(255) COLLATE pg_catalog."default",
+    jwks_endpoint character varying(255) COLLATE pg_catalog."default",
+    name character varying(255) COLLATE pg_catalog."default",
+    public_key character varying(512) COLLATE pg_catalog."default",
+    status character varying(255) COLLATE pg_catalog."default",
+    role_id uuid,
+    patient_idp uuid,
+    practitioner_idp uuid,
+    CONSTRAINT smart_service_pkey PRIMARY KEY (id),
+    CONSTRAINT client_id_index UNIQUE (client_id),
+    CONSTRAINT unique_jwks_endpoint UNIQUE (jwks_endpoint),
+    CONSTRAINT unique_public_key UNIQUE (public_key),
+    CONSTRAINT fkcosi5jmx6d18vmwqhv2h3gmr0 FOREIGN KEY (role_id)
+        REFERENCES public.role (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT patient_idp_fk FOREIGN KEY (patient_idp)
+        REFERENCES public.identity_provider (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT practitioner_idp_fk FOREIGN KEY (practitioner_idp)
+        REFERENCES public.identity_provider (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
     """
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     created_by = db.Column(db.String(255))
@@ -112,10 +125,12 @@ class SmartService(db.Model):
     client_id = db.Column(db.String(255))
     jwks_endpoint = db.Column(db.String(255))
     status = db.Column(db.Enum(SmartServiceStatus))
-    public_key = db.Column(db.String(255))
+    public_key = db.Column(db.String(512))
     role_id = db.Column(GUID(), ForeignKey(Role.id))
     name = db.Column(db.String(255))
     fhir_store_device_id = db.Column(db.String(255))
+    patient_idp = db.Column(GUID(), ForeignKey('identity_provider.id'), nullable=True)
+    practitioner_idp = db.Column(GUID(), ForeignKey('identity_provider.id'), nullable=True)
 
 
 class Permission(db.Model):
@@ -157,3 +172,27 @@ class PermissionServiceGrant(db.Model):
     """
     permission_id = db.Column(GUID(), ForeignKey('permission.id'), primary_key=True)
     smart_service_id = db.Column(GUID(), ForeignKey('smart_service.id'), primary_key=True)
+
+class IdentityProvider(db.Model):
+    """
+    CREATE TABLE IF NOT EXISTS public.identity_provider
+    (
+        id uuid NOT NULL,
+    created_by character varying(255) COLLATE pg_catalog."default",
+    created_on timestamp without time zone,
+    client_id character varying(255) COLLATE pg_catalog."default",
+    client_secret character varying(255) COLLATE pg_catalog."default",
+    endpoint character varying(255) COLLATE pg_catalog."default",
+    name character varying(255) COLLATE pg_catalog."default",
+    username_attribute character varying(255) COLLATE pg_catalog."default",
+    CONSTRAINT identity_provider_pkey PRIMARY KEY (id)
+    )
+    """
+    id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
+    created_by = db.Column(db.String(255))
+    created_on = db.Column(db.DateTime())
+    client_id = db.Column(db.String(255))
+    client_secret = db.Column(db.String(255))
+    endpoint = db.Column(db.String(255))
+    name = db.Column(db.String(255))
+    username_attribute = db.Column(db.String(255))

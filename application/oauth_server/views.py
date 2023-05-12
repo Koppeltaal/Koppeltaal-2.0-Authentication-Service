@@ -67,6 +67,15 @@ def create_blueprint() -> Blueprint:
                               "redirect_uri": current_app.config["IDP_AUTHORIZE_REDIRECT_URL"],
                               "scope": "openid",
                               "login": "true"}
+
+                # Check if the smart service has a custom IDP
+                smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(oauth2_session.client_id)
+                if launch_token.sub and launch_token.sub.startsWith('Practitioner') and smart_service.practitioner_idp:
+                    return redirect(f'{smart_service.practitioner_idp}?{urlencode(parameters)}')
+                if launch_token.sub and launch_token.sub.startsWith('Patient') and smart_service.patient_idp:
+                    return redirect(f'{smart_service.patient_idp}?{urlencode(parameters)}')
+
+                # Otherwise send to the default IDP
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
             else:
                 return redirect(
