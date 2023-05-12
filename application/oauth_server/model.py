@@ -129,8 +129,8 @@ class SmartService(db.Model):
     role_id = db.Column(GUID(), ForeignKey(Role.id))
     name = db.Column(db.String(255))
     fhir_store_device_id = db.Column(db.String(255))
-    patient_idp = db.Column(GUID(), ForeignKey('identity_provider.id'), nullable=True)
-    practitioner_idp = db.Column(GUID(), ForeignKey('identity_provider.id'), nullable=True)
+    patient_idp = db.Column(GUID(), ForeignKey('identity_provider.id'))
+    practitioner_idp = db.Column(GUID(), ForeignKey('identity_provider.id'))
 
 
 class Permission(db.Model):

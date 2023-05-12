@@ -70,9 +70,10 @@ def create_blueprint() -> Blueprint:
 
                 # Check if the smart service has a custom IDP
                 smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(oauth2_session.client_id)
-                if launch_token.sub and launch_token.sub.startsWith('Practitioner') and smart_service.practitioner_idp:
+                launch_sub:str = launch_token['sub']
+                if launch_sub and launch_sub.startswith('Practitioner') and smart_service.practitioner_idp:
                     return redirect(f'{smart_service.practitioner_idp}?{urlencode(parameters)}')
-                if launch_token.sub and launch_token.sub.startsWith('Patient') and smart_service.patient_idp:
+                if launch_sub and launch_sub.startswith('Patient') and smart_service.patient_idp:
                     return redirect(f'{smart_service.patient_idp}?{urlencode(parameters)}')
 
                 # Otherwise send to the default IDP
