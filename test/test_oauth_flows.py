@@ -14,7 +14,7 @@ from flask.testing import FlaskClient
 
 from application import create_app
 from application.database import db
-from application.oauth_server.model import SmartService, SmartServiceStatus
+from application.oauth_server.model import SmartService, SmartServiceStatus, IdentityProvider
 from application.utils import get_private_key_as_pem, get_public_key_as_pem
 from utils import _client_assertion, _hti_token, _get_params_from_redirect
 
@@ -46,6 +46,11 @@ def testing_app(server_key: Key):
 @pytest.fixture()
 def client_id():
     return str(uuid4())
+
+
+@pytest.fixture()
+def client_id_idp() -> str:
+    yield str(uuid4())
 
 
 @pytest.fixture()
@@ -93,6 +98,23 @@ def smart_service_portal(portal_key: Key, portal_id: str):
 
 
 @pytest.fixture()
+def smart_service_custom_idp(identity_provider, client_key: Key, client_id_idp: str):
+    public_key_bytes = get_public_key_as_pem(client_key)
+    smart_service_custom_idp = SmartService(created_by='admin',
+                                        client_id=client_id_idp,
+                                        status=SmartServiceStatus.APPROVED,
+                                        public_key=public_key_bytes.decode('utf8'),
+                                        fhir_store_device_id=str(uuid4()),
+                                        patient_idp=identity_provider.id,
+                                        practitioner_idp=identity_provider.id)
+    print("custom idp met client_id: ", client_id_idp)
+    print("custom idp met client_id: ", smart_service_custom_idp.client_id)
+    db.session.add(smart_service_custom_idp)
+    db.session.commit()
+    yield smart_service_custom_idp
+
+
+@pytest.fixture()
 def foreign_key() -> Key:
     key: Key = JsonWebKey.generate_key('RSA', 2048, is_private=True)
     key.check_key_op('sign')
@@ -131,6 +153,22 @@ def code_verifier():
 def code_challenge(code_verifier):
     return base64.b64encode(sha256(code_verifier.encode('ascii')).digest()).decode('ascii')
 
+
+@pytest.fixture()
+def custom_idp_location():
+    return 'https://unit.test/idp'
+
+
+@pytest.fixture()
+def identity_provider(custom_idp_location):
+    identity_provider = IdentityProvider(created_by='admin',
+                                         client_id='client-id',
+                                         client_secret='top-secret',
+                                         username_attribute='sub',
+                                         endpoint=custom_idp_location)
+    db.session.add(identity_provider)
+    db.session.commit()
+    yield identity_provider
 
 def test_client_credentials_happy(testing_app: FlaskClient, foreign_key, client_key: Key, client_id: str,
                                   smart_service_client: SmartService):
@@ -221,6 +259,32 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
     assert response_data['patient'] == patient_id
     assert response_data['resource'] == resource_id
 
+@mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
+@mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
+def test_authorization_code_with_custom_idp(mock1, mock2, testing_app: FlaskClient, foreign_key,
+                                            client_key: Key,
+                                            portal_key: Key,
+                                            client_id: str,
+                                            portal_id: str,
+                                            user_id: str,
+                                            patient_id: str,
+                                            resource_id: str,
+                                            smart_service_client: SmartService,
+                                            smart_service_portal: SmartService,
+                                            smart_service_custom_idp: SmartService,
+                                            custom_idp_location: str):
+    state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': 'https://module.local./back',
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': smart_service_custom_idp.client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
+            'state': state}
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+
+    idp_redirect_location = authorize_resp.get_wsgi_headers({})['Location']
+
+    assert idp_redirect_location.startswith(custom_idp_location)
 
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
 @mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)

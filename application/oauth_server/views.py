@@ -14,7 +14,7 @@ from encodings.base64_codec import base64_decode
 from flask import Blueprint, redirect, request, jsonify, current_app
 
 from application.database import db
-from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService
+from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService, IdentityProvider
 from application.oauth_server.scopes import scope_service
 from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
     smart_hti_on_fhir_service, server_oauth2_service, token_authorization_code_service, LAUNCH_SCOPE_DEFAULT
@@ -70,11 +70,14 @@ def create_blueprint() -> Blueprint:
 
                 # Check if the smart service has a custom IDP
                 smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(oauth2_session.client_id)
-                launch_sub:str = launch_token['sub']
+                launch_sub: str = launch_token['sub']
+
                 if launch_sub and launch_sub.startswith('Practitioner') and smart_service.practitioner_idp:
-                    return redirect(f'{smart_service.practitioner_idp}?{urlencode(parameters)}')
+                    redirect_base_url: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.practitioner_idp).first()
+                    return redirect(f'{redirect_base_url.endpoint}?{urlencode(parameters)}')
                 if launch_sub and launch_sub.startswith('Patient') and smart_service.patient_idp:
-                    return redirect(f'{smart_service.patient_idp}?{urlencode(parameters)}')
+                    redirect_base_url: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.patient_idp).first()
+                    return redirect(f'{redirect_base_url.endpoint}?{urlencode(parameters)}')
 
                 # Otherwise send to the default IDP
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
