@@ -1,4 +1,5 @@
 import logging
+import urllib.request, json
 from typing import Tuple
 from urllib.parse import urlencode
 
@@ -6,7 +7,7 @@ import jwt as pyjwt
 import requests
 from flask import request, current_app
 
-from application.oauth_server.model import Oauth2Session
+from application.oauth_server.model import Oauth2Session, IdentityProvider
 from application.oauth_server.service import token_service
 
 logger = logging.getLogger('idp_service')
@@ -20,6 +21,8 @@ the launch is performed by the actual user
 '''
 class IdpService:
     def consume_idp_code(self) -> Tuple[str, int]:
+        user_claim = "email"
+
         state = request.values.get('state')
         if not state:
             logger.error('No state found on the authentication response')
@@ -42,19 +45,24 @@ class IdpService:
         # user from the launch. This way we know the user really is the same person as the HTI token states.
         # When a launch token would be compromised, this logic would still make it useless as the identity needs to be
         # verified at the IDP
-        oidc_token = self.exchange_idp_code(code)
+        oidc_token = self.exchange_idp_code(code, oauth2_session)
         encoded_id_token = oidc_token['id_token']
         if not encoded_id_token:
             logger.error(f'[{oauth2_session.id}] no id_token found')
             return 'Bad request, no id_token found', 400
 
         id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
-        email = id_token['email']
-        if not email:
-            logger.error(f'[{oauth2_session.id}] no email found in id_token')
-            return 'Bad request, no email found in id_token', 400
 
-        logger.info(f'[{oauth2_session.id}] IdP id_token contains email [{email}]')
+        if oauth2_session.identity_provider:
+            identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
+            user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
+
+        user_identifier = id_token[user_claim]
+        if not user_identifier:
+            logger.error(f'[{oauth2_session.id}] no [{identity_provider.username_attribute}] claim found in id_token')
+            return f'Bad request, no [{identity_provider.username_attribute}] claim found in id_token', 400
+
+        logger.info(f'[{oauth2_session.id}] IdP id_token contains claim [{user_claim}] with value [{user_identifier}]')
 
         # get the user from the FHIR server, to verify if the Patient has this email set as an identifier
         access_token = token_service.get_system_access_token()
@@ -69,24 +77,36 @@ class IdpService:
 
         identifiers = launching_user_resource['identifier']
         values = [identifier['value'] for identifier in identifiers if 'value' in identifier]
-        if email not in values:
-            logger.error(f'[{oauth2_session.id}] user id mismatch, expected [{email}] but found {str(values)}')
-            return 'Forbidden, patient email not found on Patient resource', 403
+        if user_identifier not in values:
+            logger.error(f'[{oauth2_session.id}] user id mismatch, expected [{user_identifier}] but found {str(values)}')
+            return f'Forbidden, patient identifier [{user_identifier}] not found on [Patient/{launching_user_resource["id"]}]', 403
 
-        logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by email [{email}]')
+        logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302
 
     @staticmethod
-    def exchange_idp_code(code):
+    def exchange_idp_code(code, oauth2_session: Oauth2Session):
+
+        identity_provider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first() \
+            if oauth2_session.identity_provider else None
+
         payload = {
             'grant_type': 'authorization_code',
-            'client_id': current_app.config['IDP_AUTHORIZE_CLIENT_ID'],
-            'client_secret': current_app.config['IDP_AUTHORIZE_CLIENT_SECRET'],
+            'client_id': identity_provider.client_id if identity_provider else current_app.config['IDP_AUTHORIZE_CLIENT_ID'],
+            'client_secret': identity_provider.client_secret if identity_provider else current_app.config['IDP_AUTHORIZE_CLIENT_SECRET'],
             'code': code,
             'redirect_uri': current_app.config['IDP_AUTHORIZE_REDIRECT_URL']
         }
+
+        if identity_provider:
+            with urllib.request.urlopen(identity_provider.endpoint) as url:
+                data = json.load(url)
+                requests.post(data['token_endpoint'],
+                              data=payload,
+                              headers={'content-type': "application/x-www-form-urlencoded"}
+                              ).json()
 
         return requests.post(current_app.config['IDP_TOKEN_ENDPOINT'],
                              data=payload,

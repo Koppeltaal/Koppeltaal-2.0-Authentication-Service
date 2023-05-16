@@ -24,6 +24,7 @@ class Oauth2Session(db.Model):
     state = db.Column(db.Text())
     launch = db.Column(db.Text())  # alter table oauth2_session modify column launch TEXT
     aud = db.Column(db.String(128))  # alter table oauth2_session add column aud VARCHAR(255)
+    identity_provider = db.Column(GUID(), ForeignKey('identity_provider.id'))
 
     user_fhir_reference = db.Column(db.String(80))
     code = db.Column(db.String(80), unique=True, nullable=False)

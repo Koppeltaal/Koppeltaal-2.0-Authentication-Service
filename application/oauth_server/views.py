@@ -5,6 +5,7 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
 import logging
+import urllib.request
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -72,12 +73,23 @@ def create_blueprint() -> Blueprint:
                 smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(oauth2_session.client_id)
                 launch_sub: str = launch_token['sub']
 
-                if launch_sub and launch_sub.startswith('Practitioner') and smart_service.practitioner_idp:
-                    redirect_base_url: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.practitioner_idp).first()
-                    return redirect(f'{redirect_base_url.endpoint}?{urlencode(parameters)}')
-                if launch_sub and launch_sub.startswith('Patient') and smart_service.patient_idp:
-                    redirect_base_url: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.patient_idp).first()
-                    return redirect(f'{redirect_base_url.endpoint}?{urlencode(parameters)}')
+                if launch_sub and launch_sub.startswith('Practitioner') and smart_service and smart_service.practitioner_idp:
+                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.practitioner_idp).first()
+                    oauth2_session.identity_provider = identity_provider.id
+                    db.session.commit()
+
+                    with urllib.request.urlopen(identity_provider.endpoint) as url:
+                        data = json.load(url)
+                        return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
+
+                if launch_sub and launch_sub.startswith('Patient') and smart_service and smart_service.patient_idp:
+                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.patient_idp).first()
+                    oauth2_session.identity_provider = identity_provider.id
+                    db.session.commit()
+
+                    with urllib.request.urlopen(identity_provider.endpoint) as url:
+                        data = json.load(url)
+                        return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
                 # Otherwise send to the default IDP
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
