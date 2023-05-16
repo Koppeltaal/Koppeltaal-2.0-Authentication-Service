@@ -46,6 +46,7 @@ class IdpService:
         # When a launch token would be compromised, this logic would still make it useless as the identity needs to be
         # verified at the IDP
         oidc_token = self.exchange_idp_code(code, oauth2_session)
+        logger.info(f"Received oidc token: {oidc_token}")
         encoded_id_token = oidc_token['id_token']
         if not encoded_id_token:
             logger.error(f'[{oauth2_session.id}] no id_token found')
@@ -103,7 +104,7 @@ class IdpService:
         if identity_provider:
             with urllib.request.urlopen(identity_provider.openid_config_endpoint) as url:
                 data = json.load(url)
-                requests.post(data['token_endpoint'],
+                return requests.post(data['token_endpoint'],
                               data=payload,
                               headers={'content-type': "application/x-www-form-urlencoded"}
                               ).json()
