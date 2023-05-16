@@ -183,7 +183,7 @@ class IdentityProvider(db.Model):
     created_on timestamp without time zone,
     client_id character varying(255) COLLATE pg_catalog."default",
     client_secret character varying(255) COLLATE pg_catalog."default",
-    endpoint character varying(255) COLLATE pg_catalog."default",
+    openid_config_endpoint character varying(255) COLLATE pg_catalog."default",
     name character varying(255) COLLATE pg_catalog."default",
     username_attribute character varying(255) COLLATE pg_catalog."default",
     CONSTRAINT identity_provider_pkey PRIMARY KEY (id)
@@ -194,6 +194,6 @@ class IdentityProvider(db.Model):
     created_on = db.Column(db.DateTime())
     client_id = db.Column(db.String(255))
     client_secret = db.Column(db.String(255))
-    endpoint = db.Column(db.String(255))
+    openid_config_endpoint = db.Column(db.String(255))
     name = db.Column(db.String(255))
     username_attribute = db.Column(db.String(255))

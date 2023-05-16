@@ -78,7 +78,7 @@ def create_blueprint() -> Blueprint:
                     oauth2_session.identity_provider = identity_provider.id
                     db.session.commit()
 
-                    with urllib.request.urlopen(identity_provider.endpoint) as url:
+                    with urllib.request.urlopen(identity_provider.openid_config_endpoint) as url:
                         data = json.load(url)
                         return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
@@ -87,7 +87,7 @@ def create_blueprint() -> Blueprint:
                     oauth2_session.identity_provider = identity_provider.id
                     db.session.commit()
 
-                    with urllib.request.urlopen(identity_provider.endpoint) as url:
+                    with urllib.request.urlopen(identity_provider.openid_config_endpoint) as url:
                         data = json.load(url)
                         return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 

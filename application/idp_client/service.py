@@ -101,7 +101,7 @@ class IdpService:
         }
 
         if identity_provider:
-            with urllib.request.urlopen(identity_provider.endpoint) as url:
+            with urllib.request.urlopen(identity_provider.openid_config_endpoint) as url:
                 data = json.load(url)
                 requests.post(data['token_endpoint'],
                               data=payload,
