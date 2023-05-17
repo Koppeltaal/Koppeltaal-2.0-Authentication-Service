@@ -16,6 +16,6 @@ def create_blueprint() -> Blueprint:
     def consume_idp_code():
         url, code = idp_service.consume_idp_code()
 
-        return redirect(url) if code == 302 else url
+        return redirect(url) if code == 302 else (url, code)
 
     return blueprint

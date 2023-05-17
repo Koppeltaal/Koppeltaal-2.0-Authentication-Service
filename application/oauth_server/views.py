@@ -5,7 +5,6 @@
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
 import logging
-import urllib.request
 from json import JSONDecodeError
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -92,16 +91,17 @@ def create_blueprint() -> Blueprint:
                     return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
                 if launch_sub and launch_sub.startswith('Patient') and smart_service and smart_service.patient_idp:
-                    logger.info(f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for Patients.")
-                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=smart_service.patient_idp).first()
+                    logger.info(
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for Patients.")
+                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
+                        id=smart_service.patient_idp).first()
                     oauth2_session.identity_provider = identity_provider.id
                     db.session.commit()
 
                     parameters['client_id'] = identity_provider.client_id
 
-                    with urllib.request.urlopen(identity_provider.openid_config_endpoint) as url:
-                        data = json.load(url)
-                        return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
+                    data = requests.get(identity_provider.openid_config_endpoint).json()
+                    return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
                 # Otherwise send to the default IDP
                 logger.info(f"/oauth2/authorize smart service [{smart_service.id}] - no custom idp found or `sub` not a Patient or Practitioner")

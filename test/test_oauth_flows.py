@@ -14,7 +14,7 @@ from flask.testing import FlaskClient
 
 from application import create_app
 from application.database import db
-from application.oauth_server.model import SmartService, SmartServiceStatus, IdentityProvider
+from application.oauth_server.model import SmartService, SmartServiceStatus, IdentityProvider, Oauth2Session
 from application.utils import get_private_key_as_pem, get_public_key_as_pem
 from utils import _client_assertion, _hti_token, _get_params_from_redirect
 
@@ -187,7 +187,7 @@ def test_client_credentials_happy(testing_app: FlaskClient, foreign_key, client_
     assert jwt_decode['azp'] == smart_service_client.client_id
 
 
-def _test_authorization_code_happy_post(url, data, headers):
+def _test_authorization_code_happy_post(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data, status_code):
             self.json_data = json_data
@@ -203,7 +203,7 @@ def _test_authorization_code_happy_post(url, data, headers):
     return MockResponse({'id_token': id_token}, 200)
 
 
-def _test_authorization_code_happy_get(url, headers=None):
+def _test_authorization_code_happy_get(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data, status_code):
             self.json_data = json_data
@@ -217,7 +217,7 @@ def _test_authorization_code_happy_get(url, headers=None):
     return MockResponse(data, 200)
 
 
-def _test_requests_get_json(url):
+def _test_authorization_code_with_custom_idp_get(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data, status_code):
             self.json_data = json_data
@@ -227,8 +227,14 @@ def _test_requests_get_json(url):
         def json(self):
             return self.json_data
 
-    data = {'identifier': [{'value': 'test@example.com'}], 'authorization_endpoint': 'https://unit.test/idp'}
+    data = {'identifier': [{'value': 'user'}],
+            'authorization_endpoint': 'https://unit.test/idp',
+            'token_endpoint': 'https://unit.test/token'}
     return MockResponse(data, 200)
+
+
+def _exchange_idp_code(code, oauth2_session: Oauth2Session):
+    pass
 
 
 def _test_fetch_openid_configuration(url):
@@ -287,10 +293,10 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
     assert response_data['patient'] == patient_id
     assert response_data['resource'] == resource_id
 
-# TODO: Fix unit test where the openid-configuration is properly mocked
+
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
-@mock.patch('requests.get', side_effect=_test_requests_get_json)
-def test_authorization_code_with_custom_idp(mock1, mock2, testing_app: FlaskClient, foreign_key,
+@mock.patch('requests.get', side_effect=_test_authorization_code_with_custom_idp_get)
+def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: FlaskClient, foreign_key,
                                             client_key: Key,
                                             portal_key: Key,
                                             client_id: str,
@@ -302,19 +308,46 @@ def test_authorization_code_with_custom_idp(mock1, mock2, testing_app: FlaskClie
                                             smart_service_portal: SmartService,
                                             smart_service_custom_idp: SmartService,
                                             custom_idp_location: str):
-    state = str(uuid4())
+    module_state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': 'https://module.local./back',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_custom_idp.client_id,
             'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
-            'state': state}
+            'state': module_state}
 
+    ## AUTHORIZE
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+    ## SHOULD REDIRECT TO IDP
+    assert authorize_resp.get_wsgi_headers({})['Location'].startswith(custom_idp_location)
 
-    idp_redirect_location = authorize_resp.get_wsgi_headers({})['Location']
+    ## EMULATE THE IDP BY A RETURN, SHOULD REDIRECT TO MODULE
+    idp_code = str(uuid4())
+    idp_state = _get_params_from_redirect(authorize_resp, "state")
+    redirect_resp = testing_app.get(f'/idp/oidc/code?state={idp_state}&code={idp_code}')
+    token_code, token_state = _get_params_from_redirect(redirect_resp, 'code', 'state')
+    assert token_state == module_state
+    ## SHOULD REDIRECT TO MODULE
+    assert redirect_resp.location.startswith('https://module.local./back')
 
-    assert idp_redirect_location.startswith(custom_idp_location)
+    ## MODULE FETCHES TOKEN
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': _client_assertion(testing_app, client_key, smart_service_custom_idp.client_id),
+            'code': token_code,
+            'state': token_state,
+            'code_verifier': code_verifier,
+            'redirect_uri': 'https://module.local./back',
+            'grant_type': 'authorization_code'}
+
+    rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})
+    assert rv.status_code == 200
+    response_data = rv.json
+    access_token = response_data.get('access_token')
+    assert access_token is not None
+    assert access_token == 'NOOP'
+    assert response_data['sub'] == user_id
+    assert response_data['patient'] == patient_id
+    assert response_data['resource'] == resource_id
 
 
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)

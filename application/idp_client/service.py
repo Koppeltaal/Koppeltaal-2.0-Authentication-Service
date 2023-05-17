@@ -1,5 +1,4 @@
 import logging
-import urllib.request, json
 from typing import Tuple
 from urllib.parse import urlencode
 
@@ -57,6 +56,8 @@ class IdpService:
         if oauth2_session.identity_provider:
             identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
             user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
+        else:
+            return 'Server error, could not find associated identity_provider', 500
 
         user_identifier = id_token[user_claim]
         if not user_identifier:
@@ -102,12 +103,11 @@ class IdpService:
         }
 
         if identity_provider:
-            with urllib.request.urlopen(identity_provider.openid_config_endpoint) as url:
-                data = json.load(url)
-                return requests.post(data['token_endpoint'],
-                              data=payload,
-                              headers={'content-type': "application/x-www-form-urlencoded"}
-                              ).json()
+            data = requests.get(identity_provider.openid_config_endpoint).json()
+            return requests.post(data['token_endpoint'],
+                                 data=payload,
+                                 headers={'content-type': "application/x-www-form-urlencoded"}
+                                 ).json()
 
         return requests.post(current_app.config['IDP_TOKEN_ENDPOINT'],
                              data=payload,
