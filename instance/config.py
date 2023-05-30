@@ -69,7 +69,8 @@ IDP_AUTHORIZE_CLIENT_ID = envget_str('IDP_AUTHORIZE_CLIENT_ID', 'poc-auth-servic
 IDP_AUTHORIZE_CLIENT_SECRET = envget_str('IDP_AUTHORIZE_CLIENT_SECRET', '<SECRET>')
 IDP_AUTHORIZE_REDIRECT_URL = envget_str('IDP_AUTHORIZE_REDIRECT_URL', 'http://localhost:5000/idp/oidc/code')
 
-SMART_BACKEND_SERVICE_CLIENT_ID = envget_str('SMART_BACKEND_SERVICE_CLIENT_ID', 'd44ba2e2-4762-465f-b825-d2b291d07db6')
+SMART_BACKEND_SERVICE_CLIENT_ID = envget_str('SMART_BACKEND_SERVICE_CLIENT_ID', '386ec17e-ecc8-4894-b0ac-d5d43f38a0bf')
+SMART_BACKEND_SERVICE_DEVICE_ID = envget_str('SMART_BACKEND_SERVICE_DEVICE_ID', 'adf2e656-6ac8-4c71-b641-97325b7a5151')
 
 # https://hl7.org/fhir/uv/bulkdata/authorization/index.html#advertising-server-conformance-with-smart-backend-services
 OIDC_SMART_CONFIG_ENABLED = envget_bool('OIDC_SMART_CONFIG_ENABLED', False)

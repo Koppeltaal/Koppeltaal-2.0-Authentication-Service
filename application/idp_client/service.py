@@ -6,6 +6,7 @@ import jwt as pyjwt
 import requests
 from flask import request, current_app
 
+from application.fhir_logging_client.service import fhir_logging_service
 from application.oauth_server.model import Oauth2Session, IdentityProvider
 from application.oauth_server.service import token_service
 
@@ -84,6 +85,8 @@ class IdpService:
             return f'Forbidden, patient identifier [{user_identifier}] not found on [Patient/{launching_user_resource["id"]}]', 403
 
         logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
+
+        fhir_logging_service.register_idp_interaction(f'Patient/{launching_user_resource["id"]}')
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302
