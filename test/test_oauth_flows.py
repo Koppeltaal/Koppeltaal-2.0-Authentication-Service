@@ -35,6 +35,7 @@ def testing_app(server_key: Key):
                       'IDP_TOKEN_ENDPOINT': 'http://localhost:5000/idp/token',
                       'IDP_AUTHORIZE_CLIENT_SECRET': str(uuid4()),
                       'SMART_BACKEND_SERVICE_CLIENT_ID': str(uuid4()),
+                      'SMART_BACKEND_SERVICE_DEVICE_ID': 'Device/' + str(uuid4()),
                       'OIDC_SMART_CONFIG_SIGNING_ALGS': ["RS384", "ES384", "RS512"],
                       'OIDC_JWT_PUBLIC_KEY': server_key.as_pem(),
                       'OIDC_JWT_PRIVATE_KEY': private_key_bytes})
@@ -218,7 +219,8 @@ def _test_authorization_code_happy_get(*args, **kwargs):
         def json(self):
             return self.json_data
 
-    data = {'identifier': [{'value': 'test@example.com'}],
+    data = {'id': 'idee',
+            'identifier': [{'value': 'test@example.com'}],
             'authorization_endpoint': 'https://unit.test/idp',
             'token_endpoint': 'https://unit.test/token'
             }
@@ -235,7 +237,8 @@ def _test_authorization_code_with_custom_idp_get(*args, **kwargs):
         def json(self):
             return self.json_data
 
-    data = {'identifier': [{'value': 'test@example.com'}],
+    data = {'id': 'idee',
+            'identifier': [{'value': 'test@example.com'}],
             'authorization_endpoint': 'https://unit.test/idp',
             'token_endpoint': 'https://unit.test/token'}
     return MockResponse(data, 200)
