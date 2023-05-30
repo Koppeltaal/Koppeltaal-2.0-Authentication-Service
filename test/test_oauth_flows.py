@@ -73,25 +73,30 @@ def resource_id():
     return f'Task/{str(uuid4())}'
 
 @pytest.fixture()
-def smart_service_client(testing_app: FlaskClient, client_key: Key, client_id: str):
+def smart_service_client(testing_app: FlaskClient, client_key: Key, client_id: str,
+                         identity_provider: IdentityProvider):
     public_key_bytes = get_public_key_as_pem(client_key)
     smart_service_client = SmartService(created_by='admin',
                                         client_id=client_id,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=str(uuid4()))
+                                        fhir_store_device_id=str(uuid4()),
+                                        patient_idp=identity_provider.id,
+                                        practitioner_idp=identity_provider.id)
     db.session.add(smart_service_client)
     db.session.commit()
     yield smart_service_client
 
 
 @pytest.fixture()
-def smart_service_portal(portal_key: Key, portal_id: str):
+def smart_service_portal(portal_key: Key, portal_id: str, identity_provider: IdentityProvider):
     public_key_bytes = get_public_key_as_pem(portal_key)
     smart_service_portal = SmartService(created_by='admin',
                                         client_id=portal_id,
                                         status=SmartServiceStatus.APPROVED,
-                                        public_key=public_key_bytes.decode('utf8'))
+                                        public_key=public_key_bytes.decode('utf8'),
+                                        patient_idp=identity_provider.id,
+                                        practitioner_idp=identity_provider.id)
     db.session.add(smart_service_portal)
     db.session.commit()
     yield smart_service_portal
@@ -197,7 +202,7 @@ def _test_authorization_code_happy_post(*args, **kwargs):
         def json(self):
             return self.json_data
 
-    data = {'sub': 'user',
+    data = {'sub': 'test@example.com',
             'email': 'test@example.com'}
     id_token = jwt.encode(data, key=None, algorithm='none')
     return MockResponse({'id_token': id_token}, 200)
@@ -213,7 +218,10 @@ def _test_authorization_code_happy_get(*args, **kwargs):
         def json(self):
             return self.json_data
 
-    data = {'identifier': [{'value': 'test@example.com'}]}
+    data = {'identifier': [{'value': 'test@example.com'}],
+            'authorization_endpoint': 'https://unit.test/idp',
+            'token_endpoint': 'https://unit.test/token'
+            }
     return MockResponse(data, 200)
 
 
@@ -227,7 +235,7 @@ def _test_authorization_code_with_custom_idp_get(*args, **kwargs):
         def json(self):
             return self.json_data
 
-    data = {'identifier': [{'value': 'user'}],
+    data = {'identifier': [{'value': 'test@example.com'}],
             'authorization_endpoint': 'https://unit.test/idp',
             'token_endpoint': 'https://unit.test/token'}
     return MockResponse(data, 200)
