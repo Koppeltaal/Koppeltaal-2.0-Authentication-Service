@@ -68,7 +68,7 @@ def test_happy(mock1, testing_app: FlaskClient):
     resp = fhir_logging_service.register_idp_interaction("Patient/123")
 
     json_content = json.loads(resp.json()['json'])
-    resp_json = AuditEvent.parse_raw(json_content)
+    resp_json = AuditEvent(**json_content)
 
     assert resp_json.entity[0].what.reference == "Patient/123"
     assert resp_json.agent[0].who.reference == "Device/my-unit-test-device-id"
