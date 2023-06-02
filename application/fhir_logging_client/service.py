@@ -1,3 +1,4 @@
+import json
 import logging
 import requests
 from flask import current_app
@@ -21,7 +22,7 @@ class FhirLoggingService:
 
         endpoint = f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/AuditEvent'
         logger.info(f"About to submit AuditEvent to endpoint [{endpoint}]")
-        response = requests.post(endpoint, audit_event, headers={"Authorization": "Bearer " + access_token})
+        response = requests.post(endpoint, json.dumps(audit_event.json()).encode("utf-8"), headers={"Authorization": "Bearer " + access_token})
 
         if response.ok:
             logger.info(f"Audit event created successfully with code [{response.status_code}]")

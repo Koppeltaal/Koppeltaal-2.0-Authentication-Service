@@ -1,3 +1,4 @@
+import json
 from unittest import mock
 from uuid import uuid4
 
@@ -66,7 +67,9 @@ def test_happy(mock1, testing_app: FlaskClient):
     testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
     resp = fhir_logging_service.register_idp_interaction("Patient/123")
 
-    resp_json: AuditEvent = resp.json()
+    json_content = json.loads(resp.json_data)
+    resp_json = AuditEvent.parse_raw(json_content)
+
     assert resp_json.entity[0].what.reference == "Patient/123"
     assert resp_json.agent[0].who.reference == "Device/my-unit-test-device-id"
     assert resp_json.source.observer.reference == "Device/my-unit-test-device-id"
