@@ -22,9 +22,9 @@ class FhirLoggingService:
 
         endpoint = f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/AuditEvent'
         logger.info(f"About to submit AuditEvent to endpoint [{endpoint}]")
-        audit_event_json = json.dumps(audit_event.json())
-        logger.info(f"generated audit event json: {audit_event_json}")
-        response = requests.post(endpoint, json=audit_event_json, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/fhir+json;charset=utf-8"})
+        audit_event_json = json.dumps(audit_event)
+        logger.info(f"generated audit event json: {audit_event}")
+        response = requests.post(endpoint, json=audit_event, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/fhir+json;charset=utf-8"})
 
         if response.ok:
             logger.info(f"Audit event created successfully with code [{response.status_code}]")
@@ -51,11 +51,6 @@ class FhirLoggingService:
                 "code": "110114",
                 "display": "User Authentication"
             },
-            # "subtype": {
-            #     "system": "http://dicom.nema.org/resources/ontology/DCM",
-            #     "code": "110122",
-            #     "display": "Login"
-            # },
             "action": "E",
             "outcome": "0",
             "recorded": get_timestamp_now(),
@@ -98,7 +93,8 @@ class FhirLoggingService:
             ]
         }
 
-        return AuditEvent(**data)
+        AuditEvent(**data)  # trigger validation
+        return data
 
 
 token_service = TokenService()

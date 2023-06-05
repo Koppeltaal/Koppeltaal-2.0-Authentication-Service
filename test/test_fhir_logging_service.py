@@ -67,12 +67,12 @@ def test_happy(mock1, testing_app: FlaskClient):
     testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
     resp = fhir_logging_service.register_idp_interaction("Patient/123")
 
-    json_content = json.loads(resp.json()['json'])
-    resp_json = AuditEvent.parse_raw(json_content)
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
 
-    assert resp_json.entity[0].what.reference == "Patient/123"
-    assert resp_json.agent[0].who.reference == "Device/my-unit-test-device-id"
-    assert resp_json.source.observer.reference == "Device/my-unit-test-device-id"
-    assert resp_json.outcome == "0"
+    assert resp_audit_event.entity[0].what.reference == "Patient/123"
+    assert resp_audit_event.agent[0].who.reference == "Device/my-unit-test-device-id"
+    assert resp_audit_event.source.observer.reference == "Device/my-unit-test-device-id"
+    assert resp_audit_event.outcome == "0"
     assert 'Authorization' in resp.json()['headers']
 
