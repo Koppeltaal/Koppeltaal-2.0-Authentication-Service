@@ -58,7 +58,7 @@ class TokenService:
     def get_system_access_token(self) -> str:
         return self._get_jwt_token(120, 'fhir-server',
                                    type='access',
-                                   scope='system/*.rs',
+                                   scope='system/*.cruds',
                                    sub=current_app.config['SMART_BACKEND_SERVICE_CLIENT_ID'],
                                    azp=current_app.config['SMART_BACKEND_SERVICE_CLIENT_ID'])
 
