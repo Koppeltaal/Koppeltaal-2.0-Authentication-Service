@@ -22,9 +22,9 @@ class FhirLoggingService:
 
         endpoint = f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/AuditEvent'
         logger.info(f"About to submit AuditEvent to endpoint [{endpoint}]")
-        audit_event_json = audit_event.json()
+        audit_event_json = json.dumps(audit_event.json())
         logger.info(f"generated audit event json: {audit_event}")
-        response = requests.post(endpoint, json=audit_event_json, headers={"Authorization": f"Bearer {access_token}"})
+        response = requests.post(endpoint, json=audit_event_json, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/fhir+json;charset=utf-8"})
 
         if response.ok:
             logger.info(f"Audit event created successfully with code [{response.status_code}]")
