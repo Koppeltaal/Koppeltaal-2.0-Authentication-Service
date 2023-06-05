@@ -1,5 +1,7 @@
 import json
 import logging
+from datetime import datetime
+
 import requests
 from flask import current_app
 from fhir.resources.auditevent import AuditEvent
@@ -41,6 +43,7 @@ class FhirLoggingService:
             raise Exception(f"Cannot log IDP interaction - Entity type must be Patient or Practitioner. Got [{entity_type}] instead.")
 
         data = {
+            "resourceType": "AuditEvent",
             "meta": {
                 "profile":  [
                     "http://koppeltaal.nl/fhir/StructureDefinition/KT2AuditEvent"
@@ -53,7 +56,7 @@ class FhirLoggingService:
             },
             "action": "E",
             "outcome": "0",
-            "recorded": get_timestamp_now(),
+            "recorded": datetime.utcnow().isoformat("T", "milliseconds") + "+00:00",
             "agent":  [
                 {
                     "type": {
@@ -68,7 +71,7 @@ class FhirLoggingService:
                         "reference": f"Device/{current_app.config['SMART_BACKEND_SERVICE_DEVICE_ID']}",
                         "type": "Device"
                     },
-                    "requestor": "true"
+                    "requestor": True
                 }
             ],
             "source": {
