@@ -54,6 +54,11 @@ class FhirLoggingService:
                 "code": "110114",
                 "display": "User Authentication"
             },
+            "subtype" : {
+                "system": "http://dicom.nema.org/resources/ontology/DCM",
+                "code": "110122",
+                "display": "Login"
+            },
             "action": "E",
             "outcome": "0",
             "recorded": datetime.utcnow().isoformat("T", "milliseconds") + "+00:00",
