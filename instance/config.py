@@ -63,8 +63,8 @@ OIDC_JWT_PRIVATE_KEY = envget_str('OIDC_JWT_PRIVATE_KEY', '')
 OIDC_JWT_EXP_TIME_ACCESS_TOKEN = envget_int('OIDC_JWT_EXP_TIME_ACCESS_TOKEN', 300)
 
 # IdP is used to retrieve the id_token of the logged-in user
-IDP_AUTHORIZE_ENDPOINT = envget_str('IDP_AUTHORIZE_ENDPOINT', 'https://iam.koppeltaal.headease.nl/auth/realms/Koppeltaal2/protocol/openid-connect/auth')
-IDP_TOKEN_ENDPOINT = envget_str('IDP_TOKEN_ENDPOINT', 'https://iam.koppeltaal.headease.nl/auth/realms/Koppeltaal2/protocol/openid-connect/token')
+IDP_AUTHORIZE_ENDPOINT = envget_str('IDP_AUTHORIZE_ENDPOINT', 'https://iam.koppeltaal.headease.nl/realms/Koppeltaal2/protocol/openid-connect/auth')
+IDP_TOKEN_ENDPOINT = envget_str('IDP_TOKEN_ENDPOINT', 'https://iam.koppeltaal.headease.nl/realms/Koppeltaal2/protocol/openid-connect/token')
 IDP_AUTHORIZE_CLIENT_ID = envget_str('IDP_AUTHORIZE_CLIENT_ID', 'poc-auth-service')
 IDP_AUTHORIZE_CLIENT_SECRET = envget_str('IDP_AUTHORIZE_CLIENT_SECRET', '<SECRET>')
 IDP_AUTHORIZE_REDIRECT_URL = envget_str('IDP_AUTHORIZE_REDIRECT_URL', 'http://localhost:5000/idp/oidc/code')
