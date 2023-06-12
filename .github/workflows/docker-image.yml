@@ -29,7 +29,6 @@ jobs:
         with:
           push: true
           platforms: linux/amd64,linux/arm64/v8
-          target: default
           tags: |
             jorisheadease/kt2-auth-service:${{ steps.date.outputs.date }}
             jorisheadease/kt2-auth-service:latest
