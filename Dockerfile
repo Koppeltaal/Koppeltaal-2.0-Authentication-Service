@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.8.17
 ENV TZ="Europe/Amsterdam"
 
 ADD requirements*.txt /
