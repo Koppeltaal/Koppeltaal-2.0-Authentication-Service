@@ -58,6 +58,7 @@ IRMA_CLIENT_SERVER_URL = envget_str('IRMA_CLIENT_SERVER_URL', "https://irma-auth
 
 AUTH_SERVER_ISS = envget_str('AUTH_SERVER_ISS', request.url_root)
 
+FHIR_CLIENT_SERVERURL = envget_str('FHIR_CLIENT_SERVERURL', "http://localhost:8080/fhir")
 SQLALCHEMY_DATABASE_URI = envget_str('SQLALCHEMY_DATABASE_URI', "sqlite:////tmp/koppeltaal-irma-idp.db")
 SQLALCHEMY_TRACK_MODIFICATIONS = envget_bool('SQLALCHEMY_TRACK_MODIFICATIONS', False)
 OIDC_JWT_PUBLIC_KEY = envget_str('OIDC_JWT_PUBLIC_KEY', '')
