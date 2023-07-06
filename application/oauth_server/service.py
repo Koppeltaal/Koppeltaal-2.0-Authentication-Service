@@ -70,7 +70,7 @@ class TokenService:
         private_key, public_key = keypair_service.get_keypair()
         now = get_timestamp_now()
         payload = {
-            'iss': request.url_root,
+            'iss': current_app.config['AUTH_SERVER_ISS'],
             'aud': aud,
             'iat': now,
             'nbf': now,

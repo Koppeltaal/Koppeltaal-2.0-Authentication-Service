@@ -29,6 +29,7 @@ def testing_app(server_key: Key):
                       'OIDC_SMART_CONFIG_TOKEN_ENDPOINT': 'http://localhost:8080/endpoint',
                       'OIDC_JWT_EXP_TIME_ACCESS_TOKEN': 60,
                       'FHIR_CLIENT_SERVERURL': 'http://fhir-server.com/url',
+                      'AUTH_SERVER_ISS': 'http://issuer.com',
                       'IDP_AUTHORIZE_CLIENT_ID': str(uuid4()),
                       'IDP_AUTHORIZE_REDIRECT_URL': 'http://localhost:5000/idp/oidc/code',
                       'IDP_AUTHORIZE_ENDPOINT': 'http://localhost:5000/idp/authorize',

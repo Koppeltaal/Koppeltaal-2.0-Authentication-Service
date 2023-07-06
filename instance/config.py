@@ -7,6 +7,8 @@
 import os
 import uuid
 
+from flask import request
+
 
 def envget_str(key: str, dflt: str = '') -> str:
     """
@@ -54,7 +56,7 @@ SECRET_KEY = envget_str('APP_SECRET_KEY', str(uuid.uuid1()))
 SESSION_TYPE = envget_str('APP_SESSION_TYPE', 'filesystem')
 IRMA_CLIENT_SERVER_URL = envget_str('IRMA_CLIENT_SERVER_URL', "https://irma-auth.sns.gidsopenstandaarden.org/")
 
-FHIR_CLIENT_SERVERURL = envget_str('FHIR_CLIENT_SERVERURL', "http://localhost:8080/fhir")
+AUTH_SERVER_ISS = envget_str('AUTH_SERVER_ISS', request.url_root)
 
 SQLALCHEMY_DATABASE_URI = envget_str('SQLALCHEMY_DATABASE_URI', "sqlite:////tmp/koppeltaal-irma-idp.db")
 SQLALCHEMY_TRACK_MODIFICATIONS = envget_bool('SQLALCHEMY_TRACK_MODIFICATIONS', False)
