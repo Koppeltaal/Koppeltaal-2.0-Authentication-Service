@@ -1,8 +1,11 @@
 FROM python:3.8.17
 ENV TZ="Europe/Amsterdam"
 
-ADD requirements*.txt /
-RUN pip install -r /requirements.txt
+RUN pip install poetry
+
+ADD poetry.lock /
+ADD pyproject.toml /
+RUN poetry install
 
 ADD *.py /
 ADD instance /instance
@@ -14,7 +17,7 @@ ADD test /test
 
 ## Run pylint and tests
 #RUN pip install pylint && pylint entrypoint.py application/ && pip uninstall -y pylint
-RUN pip install -r /requirements-test.txt && python -m pytest test/ && pip uninstall -y -r /requirements-test.txt
+RUN poetry install --with test && poetry run python -m pytest test/ && poetry install --without test
 
 ENV PORT "5000"
 
@@ -24,4 +27,4 @@ ENV IRMA_CLIENT_SERVER_URL "https://irma-auth.sns.gidsopenstandaarden.org/"
 ENV FLASK_ENV="production"
 ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT [ "python", "entrypoint.py"]
+ENTRYPOINT ["poetry", "run", "python", "entrypoint.py"]
