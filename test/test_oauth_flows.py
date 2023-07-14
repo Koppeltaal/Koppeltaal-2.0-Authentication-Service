@@ -14,7 +14,8 @@ from flask.testing import FlaskClient
 
 from application import create_app
 from application.database import db
-from application.oauth_server.model import SmartService, SmartServiceStatus, IdentityProvider, Oauth2Session
+from application.oauth_server.model import SmartService, SmartServiceStatus, IdentityProvider, Oauth2Session, \
+    AllowedRedirect
 from application.utils import get_private_key_as_pem, get_public_key_as_pem
 from utils import _client_assertion, _hti_token, _get_params_from_redirect
 
@@ -177,6 +178,22 @@ def identity_provider():
     db.session.commit()
     yield identity_provider
 
+
+@pytest.fixture()
+def allowed_redirect(smart_service_client, smart_service_custom_idp):
+    allowed_redirect = AllowedRedirect(smart_service_id=smart_service_client.id,
+                                       url="http://unit.test")
+    db.session.add(allowed_redirect)
+    db.session.commit()
+
+    allowed_redirect = AllowedRedirect(smart_service_id=smart_service_custom_idp.id,
+                                       url="http://unit.test")
+    db.session.add(allowed_redirect)
+    db.session.commit()
+
+    yield allowed_redirect
+
+
 def test_client_credentials_happy(testing_app: FlaskClient, foreign_key, client_key: Key, client_id: str,
                                   smart_service_client: SmartService):
     data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
@@ -274,10 +291,11 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
                                                    patient_id: str,
                                                    resource_id: str,
                                                    smart_service_client: SmartService,
-                                                   smart_service_portal: SmartService):
+                                                   smart_service_portal: SmartService,
+                                                   allowed_redirect: AllowedRedirect):
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
-            'redirect_uri': 'https://module.local./back',
+            'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': client_id,
             'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
@@ -292,7 +310,7 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
             'client_assertion': _client_assertion(testing_app, client_key, client_id),
             'code': token_code,
             'state': token_state,
-            'redirect_uri': 'https://module.local./back',
+            'redirect_uri': allowed_redirect.url,
             'grant_type': 'authorization_code'}
 
     rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})
@@ -319,10 +337,11 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
                                             smart_service_client: SmartService,
                                             smart_service_portal: SmartService,
                                             smart_service_custom_idp: SmartService,
-                                            custom_idp_location: str):
+                                            custom_idp_location: str,
+                                            allowed_redirect: AllowedRedirect):
     module_state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
-            'redirect_uri': 'https://module.local./back',
+            'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_custom_idp.client_id,
             'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
@@ -340,7 +359,7 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
     token_code, token_state = _get_params_from_redirect(redirect_resp, 'code', 'state')
     assert token_state == module_state
     ## SHOULD REDIRECT TO MODULE
-    assert redirect_resp.location.startswith('https://module.local./back')
+    assert redirect_resp.location.startswith(allowed_redirect.url)
 
     ## MODULE FETCHES TOKEN
     data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
@@ -348,7 +367,7 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
             'code': token_code,
             'state': token_state,
             'code_verifier': code_verifier,
-            'redirect_uri': 'https://module.local./back',
+            'redirect_uri': allowed_redirect.url,
             'grant_type': 'authorization_code'}
 
     rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})
@@ -360,6 +379,31 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
     assert response_data['sub'] == user_id
     assert response_data['patient'] == patient_id
     assert response_data['resource'] == resource_id
+
+@mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
+def test_authorization_with_invalid_redirect_uri(mock_get, testing_app: FlaskClient, foreign_key,
+                                            client_key: Key,
+                                            portal_key: Key,
+                                            client_id: str,
+                                            portal_id: str,
+                                            user_id: str,
+                                            patient_id: str,
+                                            resource_id: str,
+                                            smart_service_client: SmartService,
+                                            smart_service_portal: SmartService,
+                                            smart_service_custom_idp: SmartService,
+                                            custom_idp_location: str):
+    module_state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': "https://invalid.redirect.url",
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': smart_service_custom_idp.client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
+            'state': module_state}
+
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+
+    assert authorize_resp.status_code == 400
 
 
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
@@ -375,10 +419,11 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
                                                 code_challenge: str,
                                                 code_verifier: str,
                                                 smart_service_client: SmartService,
-                                                smart_service_portal: SmartService):
+                                                smart_service_portal: SmartService,
+                                                allowed_redirect: AllowedRedirect):
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
-            'redirect_uri': 'https://module.local./back',
+            'redirect_uri': allowed_redirect.url,
             'code_challenge': code_challenge,
             'code_challenge_method': 'S256',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
@@ -396,7 +441,7 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
             'code': token_code,
             'state': token_state,
             'code_verifier': code_verifier,
-            'redirect_uri': 'https://module.local./back',
+            'redirect_uri': allowed_redirect.url,
             'grant_type': 'authorization_code'}
 
     rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})

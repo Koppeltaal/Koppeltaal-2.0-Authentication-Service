@@ -15,7 +15,7 @@ from encodings.base64_codec import base64_decode
 from flask import Blueprint, redirect, request, jsonify, current_app
 
 from application.database import db
-from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService, IdentityProvider
+from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService, IdentityProvider, AllowedRedirect
 from application.oauth_server.scopes import scope_service
 from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
     smart_hti_on_fhir_service, server_oauth2_service, token_authorization_code_service, LAUNCH_SCOPE_DEFAULT
@@ -37,6 +37,16 @@ def create_blueprint() -> Blueprint:
     def handle_authorize_request():
         logger.info(f"/oauth2/authorize called with client_id [{request.values.get('client_id')}].")
 
+        smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(request.values.get('client_id'))
+        assert smart_service is not None, "SMART Service not found"  # Do not show this kind of information on a production environment
+
+        redirect_uri = request.values.get('redirect_uri')
+        allowed_redirect = AllowedRedirect.query.filter_by(
+            smart_service_id=smart_service.id,
+            url=redirect_uri
+        ).first()
+        assert allowed_redirect is not None, f"redirect_uri [{redirect_uri}] not allowed"  # Do not show this kind of information on a production environment
+
         oauth2_session = Oauth2Session()
         oauth2_session.type = 'smart_hti_on_fhir'
         scope = request.values.get('scope', LAUNCH_SCOPE_DEFAULT)
@@ -45,7 +55,7 @@ def create_blueprint() -> Blueprint:
         oauth2_session.code_challenge_method = request.values.get('code_challenge_method')
         oauth2_session.response_type = request.values.get('response_type')
         oauth2_session.client_id = request.values.get('client_id')
-        oauth2_session.redirect_uri = request.values.get('redirect_uri')
+        oauth2_session.redirect_uri = redirect_uri
         oauth2_session.state = request.values.get('state')
         oauth2_session.launch = request.values.get('launch', None)
         oauth2_session.aud = request.values.get('aud', None)
@@ -75,7 +85,6 @@ def create_blueprint() -> Blueprint:
                               "login": "true"}
 
                 # Check if the smart service has a custom IDP
-                smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(oauth2_session.client_id)
                 launch_sub: str = launch_token['sub']
 
                 if launch_sub and launch_sub.startswith('Practitioner') and smart_service and smart_service.practitioner_idp:
@@ -215,7 +224,7 @@ def create_blueprint() -> Blueprint:
 
     def _token_authorization_code(jwt):
         code = request.values.get('code')
-        redirect_uri = request.values.get('redirect_uri')
+        redirect_uri = request.values.get('redirect_uri')  # No need to verify if allowed as it has to equal the value of the `authorizez step and that has been validated
         oauth2_session: Oauth2Session = Oauth2Session.query.filter_by(code=code).first()
         assert redirect_uri == oauth2_session.redirect_uri, f'Expected redirect_uri [{oauth2_session.redirect_uri}], got [{redirect_uri}] instead'
         assert oauth2_session.client_id == jwt['iss'], f'Expected issuer [{oauth2_session.client_id}], got [{jwt["iss"]}] instead'

@@ -174,6 +174,7 @@ class PermissionServiceGrant(db.Model):
     permission_id = db.Column(GUID(), ForeignKey('permission.id'), primary_key=True)
     smart_service_id = db.Column(GUID(), ForeignKey('smart_service.id'), primary_key=True)
 
+
 class IdentityProvider(db.Model):
     """
     CREATE TABLE IF NOT EXISTS public.identity_provider
@@ -197,3 +198,28 @@ class IdentityProvider(db.Model):
     openid_config_endpoint = db.Column(db.String(255))
     name = db.Column(db.String(255))
     username_attribute = db.Column(db.String(255))
+
+
+class AllowedRedirect(db.Model):
+    """
+    -- Table: public.allowed_redirect
+
+    -- DROP TABLE IF EXISTS public.allowed_redirect;
+
+    CREATE TABLE IF NOT EXISTS public.allowed_redirect
+    (
+        smart_service_id uuid NOT NULL,
+        url character varying(255) COLLATE pg_catalog."default",
+        CONSTRAINT fk4vnv1lt4xhpcy57hkeepfsfef FOREIGN KEY (smart_service_id)
+            REFERENCES public.smart_service (id) MATCH SIMPLE
+            ON UPDATE NO ACTION
+            ON DELETE NO ACTION
+    )
+
+    TABLESPACE pg_default;
+
+    ALTER TABLE IF EXISTS public.allowed_redirect
+        OWNER to postgres;
+    """
+    smart_service_id = db.Column(GUID(), ForeignKey('smart_service.id'), primary_key=True)
+    url = db.Column(db.String(255))
