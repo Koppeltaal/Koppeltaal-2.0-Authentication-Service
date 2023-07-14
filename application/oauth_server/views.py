@@ -132,7 +132,8 @@ def create_blueprint() -> Blueprint:
         logger.info(f"allowed_redirect [{redirect_uri}] failed for client_id [{smart_service.client_id}].")
 
         # Do not show this kind of information on a production environment
-        assert False, f"redirect_uri [{redirect_uri}] not allowed"
+        valid_redirects = list(map(lambda allowed_redirect: allowed_redirect.url, allowed_redirects))
+        assert False, f"redirect_uri [{redirect_uri}] not allowed. Configured values: {valid_redirects}"
 
     @blueprint.route('/oauth2/token', methods=['POST', 'GET'])
     def handle_token_request():
