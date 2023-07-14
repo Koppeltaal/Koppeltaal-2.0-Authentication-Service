@@ -181,6 +181,11 @@ def identity_provider():
 
 @pytest.fixture()
 def allowed_redirect(smart_service_client):
+
+    other_allowed_redirect = AllowedRedirect(smart_service_id=smart_service_client.id,
+                                       url="http://some_other_unit_test_url.test")
+    db.session.add(other_allowed_redirect)
+
     allowed_redirect = AllowedRedirect(smart_service_id=smart_service_client.id,
                                        url="http://unit.test")
     db.session.add(allowed_redirect)
@@ -385,7 +390,8 @@ def test_authorization_with_invalid_redirect_uri(mock_get, testing_app: FlaskCli
                                             patient_id: str,
                                             resource_id: str,
                                             smart_service_client: SmartService,
-                                            custom_idp_location: str):
+                                            custom_idp_location: str,
+                                            allowed_redirect: AllowedRedirect):
     module_state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': "https://invalid.redirect.url",
@@ -422,6 +428,33 @@ def test_authorization_with_zero_redirect_uri(mock_get, mock_post, testing_app: 
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
 
     assert authorize_resp.status_code == 302
+
+@mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
+@mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
+def test_multiple_configured_redirect_uris(mock_get, mock_post, testing_app: FlaskClient, foreign_key,
+                                              client_key: Key,
+                                              portal_key: Key,
+                                              client_id: str,
+                                              portal_id: str,
+                                              user_id: str,
+                                              patient_id: str,
+                                              resource_id: str,
+                                              smart_service_portal: SmartService,
+                                              custom_idp_location: str,
+                                              allowed_redirect: AllowedRedirect):
+
+    module_state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': allowed_redirect.url,
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': smart_service_portal.client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id),
+            'state': module_state}
+
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+
+    assert authorize_resp.status_code == 302
+
 
 @mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
 @mock.patch('application.idp_client.service.requests.get', side_effect=_test_authorization_code_happy_get)

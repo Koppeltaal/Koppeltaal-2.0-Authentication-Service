@@ -6,7 +6,7 @@
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, PrimaryKeyConstraint
 
 from application.database import db
 from application.oauth_server.guid import GUID
@@ -221,5 +221,11 @@ class AllowedRedirect(db.Model):
     ALTER TABLE IF EXISTS public.allowed_redirect
         OWNER to postgres;
     """
-    smart_service_id = db.Column(GUID(), ForeignKey('smart_service.id'), primary_key=True)
+    __tablename__ = 'allowed_redirect'
+
+    smart_service_id = db.Column(GUID(), ForeignKey('smart_service.id'))
     url = db.Column(db.String(255))
+
+    __table_args__ = (
+        PrimaryKeyConstraint('smart_service_id', 'url'),
+    )
