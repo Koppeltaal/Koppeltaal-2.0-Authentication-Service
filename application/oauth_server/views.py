@@ -40,12 +40,7 @@ def create_blueprint() -> Blueprint:
         smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(request.values.get('client_id'))
         assert smart_service is not None, "SMART Service not found"  # Do not show this kind of information on a production environment
 
-        redirect_uri = request.values.get('redirect_uri')
-        allowed_redirect = AllowedRedirect.query.filter_by(
-            smart_service_id=smart_service.id,
-            url=redirect_uri
-        ).first()
-        assert allowed_redirect is not None, f"redirect_uri [{redirect_uri}] not allowed"  # Do not show this kind of information on a production environment
+        redirect_uri = validate_redirect_uri(smart_service)
 
         oauth2_session = Oauth2Session()
         oauth2_session.type = 'smart_hti_on_fhir'
@@ -119,6 +114,25 @@ def create_blueprint() -> Blueprint:
                 return redirect(
                     f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}')
         return 'Bad Request, invalid launch token', 400
+
+    def validate_redirect_uri(smart_service):
+        redirect_uri = request.values.get('redirect_uri')
+
+        #  If no allowed_redirect is set, assume all are allowed. Never do so in a production environment!
+        allowed_redirects = AllowedRedirect.query.filter_by(smart_service_id=smart_service.id).all()
+        if len(allowed_redirects) == 0:
+            logger.info(f"Bypassing allowed_redirect logic as not one URL is configured for client_id [{smart_service.client_id}].")
+            return redirect_uri
+
+        for allowed_redirect in allowed_redirects:
+            if redirect_uri == allowed_redirect.url:
+                logger.info(f"allowed_redirect [{redirect_uri}] successful for client_id [{smart_service.client_id}].")
+                return redirect_uri
+
+        logger.info(f"allowed_redirect [{redirect_uri}] failed for client_id [{smart_service.client_id}].")
+
+        # Do not show this kind of information on a production environment
+        assert False, f"redirect_uri [{redirect_uri}] not allowed"
 
     @blueprint.route('/oauth2/token', methods=['POST', 'GET'])
     def handle_token_request():
