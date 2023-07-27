@@ -37,7 +37,7 @@ def testing_app(server_key: Key):
                       'IDP_AUTHORIZE_CLIENT_SECRET': str(uuid4()),
                       'SMART_BACKEND_SERVICE_CLIENT_ID': str(uuid4()),
                       'SMART_BACKEND_SERVICE_DEVICE_ID': 'Device/' + str(uuid4()),
-                      'OIDC_SMART_CONFIG_SIGNING_ALGS': ["RS384", "ES384", "RS512"],
+                      'OIDC_SMART_CONFIG_SIGNING_ALGS': ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"],
                       'OIDC_JWT_PUBLIC_KEY': server_key.as_pem(),
                       'OIDC_JWT_PRIVATE_KEY': private_key_bytes})
     with app.test_client() as client:
