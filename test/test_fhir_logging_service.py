@@ -1,4 +1,3 @@
-import json
 from unittest import mock
 from uuid import uuid4
 
@@ -41,7 +40,7 @@ def testing_app(server_key: Key):
     app = create_app({'TESTING': True,
                       'SQLALCHEMY_TRACK_MODIFICATIONS': False,
                       'SQLALCHEMY_DATABASE_URI': "sqlite:////tmp/test.db",
-                      'OIDC_SMART_CONFIG_TOKEN_ENDPOINT': 'http://localhost:8080/endpoint',
+                      'OIDC_SMART_CONFIG_TOKEN_ENDPOINT': 'http://localhost/token',
                       'OIDC_JWT_EXP_TIME_ACCESS_TOKEN': 60,
                       'FHIR_CLIENT_SERVERURL': 'http://fhir-server.com/url',
                       'AUTH_SERVER_ISS': 'http://issuer.com',

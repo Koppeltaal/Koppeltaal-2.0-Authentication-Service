@@ -19,7 +19,7 @@ def testing_app(server_key: Key):
     app = create_app({'TESTING': True,
                       'SQLALCHEMY_TRACK_MODIFICATIONS' : False,
                       'SQLALCHEMY_DATABASE_URI': "sqlite:////tmp/test.db",
-                      'OIDC_SMART_CONFIG_TOKEN_ENDPOINT': 'http://localhost:8080/endpoint',
+                      'OIDC_SMART_CONFIG_TOKEN_ENDPOINT': 'http://localhost/token',
                       'OIDC_SMART_CONFIG_SIGNING_ALGS': ["RS384", "ES384", "RS512"],
                       'OIDC_JWT_PUBLIC_KEY': server_key.as_pem(),
                       'OIDC_JWT_PRIVATE_KEY': private_key_bytes})
@@ -33,7 +33,8 @@ def smart_service_foreign(foreign_key, foreign_id):
     smart_service = SmartService(created_by='admin',
                                  client_id=foreign_id,
                                  status=SmartServiceStatus.APPROVED,
-                                 public_key=get_public_key_as_pem(foreign_key).decode('utf8'))
+                                 public_key=get_public_key_as_pem(foreign_key).decode('utf8'),
+                                 fhir_store_device_id=f'Device/{foreign_id}')
     db.session.add(smart_service)
     db.session.commit()
     yield smart_service
@@ -44,7 +45,8 @@ def smart_service_client(client_key, client_id):
     smart_service = SmartService(created_by='admin',
                                  client_id=client_id,
                                  status=SmartServiceStatus.APPROVED,
-                                 public_key=get_public_key_as_pem(client_key).decode('utf8'))
+                                 public_key=get_public_key_as_pem(client_key).decode('utf8'),
+                                 fhir_store_device_id=f'Device/{client_id}')
     db.session.add(smart_service)
     db.session.commit()
     yield smart_service
@@ -88,8 +90,8 @@ def foreign_id() -> str:
 
 def test_introspect_client_happy(testing_app: FlaskClient,
                                  foreign_key: Key,
-                                 smart_service_foreign,
-                                 smart_service_client,
+                                 smart_service_foreign: SmartService,
+                                 smart_service_client: SmartService,
                                  client_assertion):
     header = {
         "alg": "RS512",
@@ -102,7 +104,7 @@ def test_introspect_client_happy(testing_app: FlaskClient,
         "exp": get_now(300),
         "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
-        "aud": smart_service_client.client_id
+        "aud": smart_service_client.fhir_store_device_id
     }
     json_token = JsonWebToken(algorithms=['RS512'])
     token = json_token.encode(header, payload, foreign_key)
@@ -137,7 +139,7 @@ def test_introspect_client_fail_audience(testing_app: FlaskClient,
             'token': token}
     rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert 'active' in rv.json
-    assert rv.json['active']
+    assert not rv.json['active']
 
 
 def test_introspect_client_fail_exp(testing_app: FlaskClient, foreign_key, smart_service_foreign, smart_service_client, client_assertion):

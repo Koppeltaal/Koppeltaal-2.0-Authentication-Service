@@ -137,13 +137,13 @@ def create_blueprint() -> Blueprint:
 
     @blueprint.route('/oauth2/token', methods=['POST', 'GET'])
     def handle_token_request():
-        jwt = _do_client_assertion()
-        if jwt:
+        auth_token = _do_client_assertion()
+        if auth_token:
             grant_type = request.values.get('grant_type')
             if grant_type == 'authorization_code':
-                return _token_authorization_code(jwt)
+                return _token_authorization_code(auth_token)
             if grant_type == 'client_credentials':
-                return _token_client_credentials(jwt)
+                return _token_client_credentials(auth_token)
             else:
                 return 'Bad Request', 400
 
@@ -159,8 +159,8 @@ def create_blueprint() -> Blueprint:
          - access_token (iss = myself)
         :return:
         """
-        jwt = _do_client_assertion()
-        if jwt:
+        auth_token = _do_client_assertion()
+        if auth_token:
             token = request.values.get('token')
             if not token:
                 return 'Bad Request, required field token missing', 400
@@ -173,7 +173,8 @@ def create_blueprint() -> Blueprint:
             if iss == request.url_root:  # signed by self
                 decoded = server_oauth2_service.verify_and_get_token(token)
             else:
-                decoded = oauth2_client_credentials_service.verify_and_get_token(token)
+                auth_client_id = auth_token['iss'] # Issuer of the auth token is the client_id of the calling application.
+                decoded = oauth2_client_credentials_service.verify_and_get_token(token, auth_client_id)
 
             if decoded:
                 # TODO: validate fields

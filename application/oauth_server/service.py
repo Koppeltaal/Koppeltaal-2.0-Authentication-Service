@@ -23,8 +23,10 @@ consumed_jti_tokens = []
 LAUNCH_SCOPE_DEFAULT = 'launch openid fhirUser'
 LAUNCH_SCOPE_ALLOWED = [['launch'], ['launch', 'openid', 'fhirUser']]
 
+
 def get_timestamp_now():
     return timegm(datetime.now(tz=timezone.utc).utctimetuple())
+
 
 class TokenAuthorizationCodeService:
     def check_challenge(self, code_challenge: str, code_verifier: str, code_challenge_method: str) -> bool:
@@ -107,7 +109,7 @@ class Oauth2ClientCredentialsService:
     """
     consumed_jti_tokens = []
 
-    def verify_and_get_token(self, encoded_token):
+    def verify_and_get_token(self, encoded_token, auth_client_id=None):
 
         logger.debug(f'Received encoded token: {encoded_token}')
         try:
@@ -140,6 +142,16 @@ class Oauth2ClientCredentialsService:
         if unverified_decoded_jwt['jti'] in consumed_jti_tokens:
             logger.warning(f"JWT is being replayed - jti {unverified_decoded_jwt['jti']} is already consumed")
             return
+
+        if 'aud' in unverified_decoded_jwt:
+            aud = unverified_decoded_jwt['aud']
+            if not self._verify_aud(aud, auth_client_id):
+                logger.warning(f'Failed to verify the aud value ({aud}) of the JWT token.')
+                return
+        else:
+            logger.warning("JWT doesn't contain a aud value")
+            return
+
 
         consumed_jti_tokens.append(unverified_decoded_jwt['jti'])
 
@@ -192,6 +204,31 @@ class Oauth2ClientCredentialsService:
 
         return smart_service
 
+    def _verify_aud(self, aud: str, auth_client_id):
+        """
+        The client credential token can either be a HTI token or a client auth token
+        :param aud: the value from the auth field
+        :param auth_client_id: the client id set as the issuer of the token
+        :return: True if the aud is valid
+        """
+        token_endpoint = self._get_token_endpoint()
+        if aud.startswith("Device/"): # Check if the audience is the Device/123 reference.
+            smart_service: SmartService = SmartService.query.filter_by(fhir_store_device_id=aud).first()
+            if smart_service and smart_service.client_id == auth_client_id:
+                return True
+
+            logger.warning(
+                f'Unable to find a smart service {aud} with client id {auth_client_id}')
+            return False
+        elif token_endpoint == aud:  # Check if the audience is the auth service itself.
+            return True
+
+        logger.warning(f'Unexpected aud in token: {aud}')
+        return False
+
+    def _get_token_endpoint(self):
+        return request.root_url + 'token'
+
 
 class ServerOauth2ClientCredentialsService():
     def verify_and_get_token(self, encoded_token):
@@ -232,7 +269,7 @@ class ServerOauth2ClientCredentialsService():
         decoded_jwt = pyjwt.decode(encoded_token, public_key.as_pem(),
                                    algorithms=current_app.config[
                                        'OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                                   options={'verify_aud': False}) # TODO: check if correct
+                                   options={'verify_aud': False})  # TODO: check if correct
 
         logger.info(f'JWT signed by self is decoded by JWKS - valid key')
         return decoded_jwt
@@ -243,14 +280,13 @@ class SmartHtiOnFhirService:
         pass
 
     @staticmethod
-    def validate_and_parse_launch_scope(scope:str, encoded_token: str):
+    def validate_and_parse_launch_scope(scope: str, encoded_token: str):
         scopes = scope.split()
         for allowed_set in LAUNCH_SCOPE_ALLOWED:
             if set(allowed_set) == set(scopes):
                 return scopes
 
         return None
-
 
     def validate_launch_token(self, encoded_token: str) -> Optional[Dict[str, Any]]:
         unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
