@@ -135,7 +135,7 @@ def create_blueprint() -> Blueprint:
         valid_redirects = list(map(lambda allowed_redirect: allowed_redirect.url, allowed_redirects))
         assert False, f"redirect_uri [{redirect_uri}] not allowed. Configured values: {valid_redirects}"
 
-    @blueprint.route('/oauth2/token', methods=['POST', 'GET'])
+    @blueprint.route('/oauth2/token', methods=['POST'])
     def handle_token_request():
         jwt = _do_client_assertion()
         if jwt:
