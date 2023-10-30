@@ -57,13 +57,11 @@ class IdpService:
         if oauth2_session.identity_provider:
             identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
             user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
-        else:
-            return 'Server error, could not find associated identity_provider', 500
 
         user_identifier = id_token[user_claim]
         if not user_identifier:
-            logger.error(f'[{oauth2_session.id}] no [{identity_provider.username_attribute}] claim found in id_token')
-            return f'Bad request, no [{identity_provider.username_attribute}] claim found in id_token', 400
+            logger.error(f'[{oauth2_session.id}] no [{user_claim}] claim found in id_token')
+            return f'Bad request, no [{user_claim}] claim found in id_token', 400
 
         logger.info(f'[{oauth2_session.id}] IdP id_token contains claim [{user_claim}] with value [{user_identifier}]')
 
