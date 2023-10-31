@@ -17,8 +17,9 @@ from flask import Blueprint, redirect, request, jsonify, current_app
 from application.database import db
 from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService, IdentityProvider, AllowedRedirect
 from application.oauth_server.scopes import scope_service
-from application.oauth_server.service import token_service, oauth2_client_credentials_service, \
-    smart_hti_on_fhir_service, server_oauth2_service, token_authorization_code_service, LAUNCH_SCOPE_DEFAULT
+from application.oauth_server.service import token_service, token_authorization_code_service, LAUNCH_SCOPE_DEFAULT
+from application.oauth_server.verifiers import hti_token_verifier, client_credentials_verifier, verify_token, \
+    get_smart_service
 
 logger = logging.getLogger('oauth_views')
 logger.setLevel(logging.DEBUG)
@@ -37,7 +38,7 @@ def create_blueprint() -> Blueprint:
     def handle_authorize_request():
         logger.info(f"/oauth2/authorize called with client_id [{request.values.get('client_id')}].")
 
-        smart_service: SmartService = smart_hti_on_fhir_service.get_smart_service(request.values.get('client_id'))
+        smart_service: SmartService = get_smart_service(request.values.get('client_id'))
         assert smart_service is not None, "SMART Service not found"  # Do not show this kind of information on a production environment
 
         redirect_uri = validate_redirect_uri(smart_service)
@@ -62,12 +63,12 @@ def create_blueprint() -> Blueprint:
         db.session.commit()
 
         assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth2_session.aud, "Invalid audience"
-        launch_token = smart_hti_on_fhir_service.validate_launch_token(oauth2_session.launch)
+        launch_token = hti_token_verifier.verify_and_get_token(oauth2_session.launch, oauth2_session.client_id)
         if launch_token:
             # If the JWT is valid, we have to verify that the launch token was not compromised by executing another
             # OIDC flow against the shared IDP. The user should already be logged in here, or a login will be
             # prompted. The username has to be present as a Patient.identifier
-            scopes = smart_hti_on_fhir_service.validate_and_parse_launch_scope(scope, launch_token)
+            scopes = hti_token_verifier.validate_and_parse_launch_scope(scope, launch_token)
             if not scopes:
                 logger.info(f"/oauth2/authorize with client_id [{request.values.get('client_id')}] had no scope. Returning 400.")
                 return 'Bad Request, invalid scope', 400
@@ -137,13 +138,13 @@ def create_blueprint() -> Blueprint:
 
     @blueprint.route('/oauth2/token', methods=['POST'])
     def handle_token_request():
-        jwt = _do_client_assertion()
-        if jwt:
+        auth_token = _do_client_assertion()
+        if auth_token:
             grant_type = request.values.get('grant_type')
             if grant_type == 'authorization_code':
-                return _token_authorization_code(jwt)
+                return _token_authorization_code(auth_token)
             if grant_type == 'client_credentials':
-                return _token_client_credentials(jwt)
+                return _token_client_credentials(auth_token)
             else:
                 return 'Bad Request', 400
 
@@ -159,8 +160,8 @@ def create_blueprint() -> Blueprint:
          - access_token (iss = myself)
         :return:
         """
-        jwt = _do_client_assertion()
-        if jwt:
+        auth_token = _do_client_assertion()
+        if auth_token:
             token = request.values.get('token')
             if not token:
                 return 'Bad Request, required field token missing', 400
@@ -170,10 +171,12 @@ def create_blueprint() -> Blueprint:
             if not iss:
                 return jsonify({'active': False})
 
-            if iss == request.url_root:  # signed by self
-                decoded = server_oauth2_service.verify_and_get_token(token)
-            else:
-                decoded = oauth2_client_credentials_service.verify_and_get_token(token)
+            aud = unverified_decoded_jwt.get('aud')
+            if not aud:
+                return jsonify({'active': False})
+
+            auth_client_id = auth_token['iss']  # Issuer of the auth token is the client_id of the calling application.
+            decoded = verify_token(token, auth_client_id)
 
             if decoded:
                 # TODO: validate fields
@@ -189,7 +192,7 @@ def create_blueprint() -> Blueprint:
         # Check if the client_assertion_type is set correctly.
         if client_assertion_type == 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer':
             encoded_token = request.values.get('client_assertion')
-            return oauth2_client_credentials_service.verify_and_get_token(encoded_token)
+            return client_credentials_verifier.verify_and_get_token(encoded_token)
         else:
             logger.info(f"Invalid client_assertion_type received: {client_assertion_type}")
 
