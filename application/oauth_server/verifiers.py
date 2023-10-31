@@ -27,12 +27,16 @@ def verify_token(encoded_token: str, auth_client_id: str) -> Optional[Dict[str, 
     token_endpoint = _get_token_endpoint()
     is_client_id = _exists_smart_service(iss)
     if iss == request.url_root and aud == 'fhir-service':
+        logger.info("verify_token matched to access_token_verifier")
         return access_token_verifier.verify_and_get_token(encoded_token)
     elif is_client_id and aud == token_endpoint:
+        logger.info("verify_token matched to client_credentials_verifier")
         return client_credentials_verifier.verify_and_get_token(encoded_token, auth_client_id)
     elif is_client_id and aud.startswith('Device/'):
+        logger.info("verify_token matched to hti_token_verifier")
         return hti_token_verifier.verify_and_get_token(encoded_token, auth_client_id)
 
+    logger.warning(f"Cannot verify token for issuer [{iss}] and aud [{aud}] - it did not match any condition matched to a verifier")
     return
 
 
