@@ -34,7 +34,7 @@ def smart_service_foreign(foreign_key, foreign_id):
                                  client_id=foreign_id,
                                  status=SmartServiceStatus.APPROVED,
                                  public_key=get_public_key_as_pem(foreign_key).decode('utf8'),
-                                 fhir_store_device_id=f'Device/{foreign_id}')
+                                 fhir_store_device_id=foreign_id)
     db.session.add(smart_service)
     db.session.commit()
     yield smart_service
@@ -46,7 +46,7 @@ def smart_service_client(client_key, client_id):
                                  client_id=client_id,
                                  status=SmartServiceStatus.APPROVED,
                                  public_key=get_public_key_as_pem(client_key).decode('utf8'),
-                                 fhir_store_device_id=f'Device/{client_id}')
+                                 fhir_store_device_id=client_id)
     db.session.add(smart_service)
     db.session.commit()
     yield smart_service
@@ -104,7 +104,7 @@ def test_introspect_client_happy(testing_app: FlaskClient,
         "exp": get_now(300),
         "iss": smart_service_foreign.client_id,
         "jti": str(uuid4()),
-        "aud": smart_service_client.fhir_store_device_id
+        "aud": f'Device/{smart_service_client.fhir_store_device_id}'
     }
     json_token = JsonWebToken(algorithms=['RS512'])
     token = json_token.encode(header, payload, foreign_key)

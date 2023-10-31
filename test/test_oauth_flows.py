@@ -83,7 +83,7 @@ def smart_service_client(testing_app: FlaskClient, client_key: Key, client_id: s
                                         client_id=client_id,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=f'Device/{client_id}',
+                                        fhir_store_device_id=client_id,
                                         patient_idp=identity_provider.id,
                                         practitioner_idp=identity_provider.id)
     db.session.add(smart_service_client)
@@ -98,7 +98,7 @@ def smart_service_portal(portal_key: Key, portal_id: str, identity_provider: Ide
                                         client_id=portal_id,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=f'Device/{portal_id}',
+                                        fhir_store_device_id=portal_id,
                                         patient_idp=identity_provider.id,
                                         practitioner_idp=identity_provider.id)
     db.session.add(smart_service_portal)
@@ -113,7 +113,7 @@ def smart_service_custom_idp(identity_provider, client_key: Key, client_id_idp: 
                                         client_id=client_id_idp,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=f'Device/{client_id_idp}',
+                                        fhir_store_device_id=client_id_idp,
                                         patient_idp=identity_provider.id,
                                         practitioner_idp=identity_provider.id)
     print("custom idp met client_id: ", client_id_idp)
@@ -299,7 +299,7 @@ def test_authorization_code_happy_without_verifier(mock1, mock2, testing_app: Fl
             'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, smart_service_client.fhir_store_device_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_client.fhir_store_device_id}'),
             'state': state}
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
     idp_code = str(uuid4())
@@ -345,7 +345,7 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
             'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_custom_idp.client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, smart_service_custom_idp.fhir_store_device_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_custom_idp.fhir_store_device_id}'),
             'state': module_state}
 
     ## AUTHORIZE
@@ -398,7 +398,7 @@ def test_authorization_with_invalid_redirect_uri(mock_get, testing_app: FlaskCli
             'redirect_uri': "https://invalid.redirect.url",
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_client.client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, smart_service_client.fhir_store_device_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_client.fhir_store_device_id}'),
             'state': module_state}
 
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
@@ -424,7 +424,7 @@ def test_authorization_with_zero_redirect_uri(mock_get, mock_post, testing_app: 
             'redirect_uri': "https://whatever.redirect.url",
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_client.client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, smart_service_client.fhir_store_device_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_client.fhir_store_device_id}'),
             'state': module_state}
 
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
@@ -451,7 +451,7 @@ def test_multiple_configured_redirect_uris(mock_get, mock_post, testing_app: Fla
             'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_client.client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, smart_service_client.fhir_store_device_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_client.fhir_store_device_id}'),
             'state': module_state}
 
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
@@ -481,7 +481,7 @@ def test_authorization_code_happy_with_verifier(mock1, mock2, testing_app: Flask
             'code_challenge_method': 'S256',
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, smart_service_client.fhir_store_device_id),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_client.fhir_store_device_id}'),
             'state': state}
     authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
     idp_code = str(uuid4())

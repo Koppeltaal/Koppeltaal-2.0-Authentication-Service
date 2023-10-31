@@ -112,7 +112,7 @@ class HtiTokenVerifier(ClientCredentialsTokenVerifier):
     @staticmethod
     def _verify_aud(aud: str, auth_client_id):
         if aud.startswith("Device/"):  # Check if the audience is the Device/123 reference.
-            smart_service: SmartService = SmartService.query.filter_by(fhir_store_device_id=aud).first()
+            smart_service: SmartService = SmartService.query.filter_by(fhir_store_device_id=aud.split("/")[1]).first()
             if smart_service and smart_service.client_id == auth_client_id:
                 return True
 
