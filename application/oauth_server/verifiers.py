@@ -88,7 +88,7 @@ class ClientCredentialsTokenVerifier:
         if token_endpoint == aud:  # Check if the audience is the auth service itself.
             return True
 
-        logger.warning(f'Unexpected aud in token: {aud}')
+        logger.warning(f'Unexpected aud in token: {aud}, expected: {token_endpoint}')
         return False
 
 
