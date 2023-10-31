@@ -222,7 +222,7 @@ def _exists_smart_service(client_id):
 
 
 def _get_token_endpoint():
-    return current_app.config('OIDC_SMART_CONFIG_TOKEN_ENDPOINT', request.base_url + 'oauth2/token')
+    return current_app.config.get('OIDC_SMART_CONFIG_TOKEN_ENDPOINT', request.base_url + 'oauth2/token')
 
 
 client_credentials_verifier = ClientCredentialsTokenVerifier()
