@@ -65,7 +65,7 @@ def testing_app(server_key: Key):
 def test_happy(mock1, testing_app: FlaskClient):
 
     testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
-    resp = fhir_logging_service.register_idp_interaction("Patient/123")
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", {})
 
     json_content = resp.json()['json']
     resp_audit_event = AuditEvent(**json_content)
@@ -75,4 +75,32 @@ def test_happy(mock1, testing_app: FlaskClient):
     assert resp_audit_event.source.observer.reference == "Device/my-unit-test-device-id"
     assert resp_audit_event.outcome == "0"
     assert 'Authorization' in resp.json()['headers']
+    assert 'X-Request-Id' in resp.json()['headers']
 
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_happy_headers(mock1, testing_app: FlaskClient):
+
+    testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
+    trace_headers = {
+        'X-Request-Id': str(uuid4()),
+        'X-Correlation-Id': str(uuid4()),
+        'X-Trace-Id': str(uuid4())
+    }
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", trace_headers)
+
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
+
+    assert resp_audit_event.entity[0].what.reference == "Patient/123"
+    assert resp_audit_event.agent[0].who.reference == "Device/my-unit-test-device-id"
+    assert resp_audit_event.source.observer.reference == "Device/my-unit-test-device-id"
+    assert resp_audit_event.extension[0].valueId == trace_headers['X-Request-Id']
+    assert resp_audit_event.extension[1].valueId == trace_headers['X-Correlation-Id']
+    assert resp_audit_event.extension[2].valueId == trace_headers['X-Trace-Id']
+    assert resp_audit_event.outcome == "0"
+    assert 'Authorization' in resp.json()['headers']
+    assert 'X-Request-Id' in resp.json()['headers']
+    # Correlation ID should be the original Request ID
+    assert trace_headers['X-Request-Id'] == resp.json()['headers']['X-Correlation-Id']
+    # Trace ID should remain the same
+    assert trace_headers['X-Trace-Id'] == resp.json()['headers']['X-Trace-Id']

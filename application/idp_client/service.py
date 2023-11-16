@@ -1,6 +1,7 @@
 import logging
 from typing import Tuple
 from urllib.parse import urlencode
+from uuid import uuid4
 
 import jwt as pyjwt
 import requests
@@ -9,6 +10,7 @@ from flask import request, current_app
 from application.fhir_logging_client.service import fhir_logging_service
 from application.oauth_server.model import Oauth2Session, IdentityProvider
 from application.oauth_server.service import token_service
+from application.utils import new_trace_headers
 
 logger = logging.getLogger('idp_service')
 logger.setLevel(logging.DEBUG)
@@ -24,6 +26,8 @@ class IdpService:
         user_claim = "email"
 
         state = request.values.get('state')
+        trace_headers = self._get_trace_headers()
+
         if not state:
             logger.error('No state found on the authentication response')
             return 'Bad request, no state found on the authentication response', 400
@@ -35,6 +39,9 @@ class IdpService:
 
         hti_launch_token = pyjwt.decode(oauth2_session.launch, options={"verify_signature": False})
         logger.info(f'[{oauth2_session.id}] Consuming idp oidc code for user {hti_launch_token["sub"]}')
+
+        if 'X-Trace-Id' not in trace_headers:
+            trace_headers['X-Trace-Id'] = hti_launch_token['jti']  # The JTI token is the trace id if not set
 
         code = request.values.get('code')
         if not code:
@@ -68,7 +75,9 @@ class IdpService:
         # get the user from the FHIR server, to verify if the Patient has this email set as an identifier
         access_token = token_service.get_system_access_token()
 
-        user_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["sub"]}', headers={"Authorization": "Bearer " + access_token})
+        headers = new_trace_headers(trace_headers, {"Authorization": "Bearer " + access_token})
+
+        user_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["sub"]}', headers=headers)
         if not user_response.ok:
             logger.error(f'Failed to fetch user {hti_launch_token["sub"]} with error code [{user_response.status_code}] and message: \n{user_response.reason}')
             return 'Bad request, user could not be fetched from store', 400
@@ -84,10 +93,21 @@ class IdpService:
 
         logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
 
-        fhir_logging_service.register_idp_interaction(f'Patient/{launching_user_resource["id"]}')
+        fhir_logging_service.register_idp_interaction(f'Patient/{launching_user_resource["id"]}', trace_headers)
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302
+
+    def _get_trace_headers(self):
+        trace_headers = {
+            'X-Request-Id': request.headers.get('X-Request-Id', str(uuid4()))
+        }
+        if 'X-Correlation-Id' in request.headers:
+            trace_headers['X-Correlation-Id'] = request.headers['X-Correlation-Id']
+        if 'X-Trace-Id' in request.headers:
+            trace_headers['X-Trace-Id'] = request.headers['X-Trace-Id']
+
+        return trace_headers
 
     @staticmethod
     def exchange_idp_code(code, oauth2_session: Oauth2Session):

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from functools import wraps
+from uuid import uuid4
 
 from authlib.jose import Key
 from cryptography.hazmat.primitives import serialization
@@ -17,6 +18,17 @@ def get_private_key_as_pem(key: Key):
                                                   encryption_algorithm=serialization.NoEncryption())
     return private_key_bytes
 
+
+def new_trace_headers(trace_headers: dict, headers: dict = None):
+    rv = {"X-Request-Id": str(uuid4())}
+    if headers:
+        rv.update(headers)
+    if "X-Request-Id" in trace_headers:
+        # No, this is not a typo, the X-Request-Id goes into X-Correlation-Id
+        rv["X-Correlation-Id"] = trace_headers['X-Request-Id']
+    if "X-Trace-Id" in trace_headers:
+        rv["X-Trace-Id"] = trace_headers['X-Trace-Id']
+    return rv
 
 def oidc_smart_config_cached():
     """ Flask decorator that allow to set Expire and Cache headers. """
