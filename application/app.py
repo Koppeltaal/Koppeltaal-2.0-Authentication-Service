@@ -55,7 +55,7 @@ def create_app(config=None) -> Flask:
     register_error_handlers(app)
     setup_database(app)
     ensure_oidc_keys(app)
-    cors = CORS(app, resources={r"/auth/*": {"origins": "*"}}, supports_credentials=True)
+    cors = CORS(app, resources={r"/oauth2/*": {"origins": "*"}}, supports_credentials=True)
     db = SQLAlchemy(app)
     return app
 
