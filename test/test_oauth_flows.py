@@ -564,3 +564,29 @@ def test_client_credentials_wrong_assertion(testing_app: FlaskClient, foreign_ke
             'grant_type': 'client_credentials'}
     rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})
     assert rv.status_code == 401
+@mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
+@mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
+def test_authorize_wrong_scope(mock1, mock2, testing_app: FlaskClient, foreign_key,
+                                                client_key: Key,
+                                                portal_key: Key,
+                                                client_id: str,
+                                                portal_id: str,
+                                                user_id: str,
+                                                patient_id: str,
+                                                resource_id: str,
+                                                smart_service_client: SmartService,
+                                                smart_service_portal: SmartService,
+                                                smart_service_custom_idp: SmartService,
+                                                custom_idp_location: str,
+                                                allowed_redirect: AllowedRedirect):
+
+    module_state = str(uuid4())
+    data = {'scope': 'launch',
+            'redirect_uri': allowed_redirect.url,
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': smart_service_custom_idp.client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_custom_idp.fhir_store_device_id}'),
+            'state': module_state}
+
+    rv = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+    assert rv.status_code == 400

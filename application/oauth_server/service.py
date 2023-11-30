@@ -21,7 +21,10 @@ logger.setLevel(logging.DEBUG)
 
 
 LAUNCH_SCOPE_DEFAULT = 'launch openid fhirUser'
-LAUNCH_SCOPE_ALLOWED = [['launch'], ['launch', 'openid', 'fhirUser']]
+LAUNCH_SCOPE_ALLOWED = [
+    # ['launch'],
+    ['launch', 'openid', 'fhirUser']
+]
 
 
 def get_timestamp_now():
