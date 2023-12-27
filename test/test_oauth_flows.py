@@ -40,7 +40,8 @@ def testing_app(server_key: Key):
                       'SMART_BACKEND_SERVICE_DEVICE_ID': 'Device/' + str(uuid4()),
                       'OIDC_SMART_CONFIG_SIGNING_ALGS': ["RS384", "ES384", "RS512"],
                       'OIDC_JWT_PUBLIC_KEY': server_key.as_pem(),
-                      'OIDC_JWT_PRIVATE_KEY': private_key_bytes})
+                      'OIDC_JWT_PRIVATE_KEY': private_key_bytes,
+                      'JWT_VALIDATION_LEEWAY': 0})
     with app.test_client() as client:
         with app.app_context():
             yield client

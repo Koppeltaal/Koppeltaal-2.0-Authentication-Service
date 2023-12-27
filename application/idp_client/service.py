@@ -37,7 +37,9 @@ class IdpService:
             logger.error(f'No session found based on id {state}')
             return 'Bad request, No session found based on id ' + state, 400
 
-        hti_launch_token = pyjwt.decode(oauth2_session.launch, options={"verify_signature": False})
+        hti_launch_token = pyjwt.decode(oauth2_session.launch,
+                                        options={"verify_signature": False},
+                                        leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
         logger.info(f'[{oauth2_session.id}] Consuming idp oidc code for user {hti_launch_token["sub"]}')
 
         if 'X-Trace-Id' not in trace_headers:
@@ -59,7 +61,9 @@ class IdpService:
             logger.error(f'[{oauth2_session.id}] no id_token found')
             return 'Bad request, no id_token found', 400
 
-        id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
+        id_token = pyjwt.decode(encoded_id_token,
+                                options={"verify_signature": False},
+                                leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))  # TODO: Verify signature
 
         if oauth2_session.identity_provider:
             identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
