@@ -166,7 +166,9 @@ def create_blueprint() -> Blueprint:
             if not token:
                 return 'Bad Request, required field token missing', 400
 
-            unverified_decoded_jwt = pyjwt.decode(token, options={"verify_signature": False})
+            unverified_decoded_jwt = pyjwt.decode(token,
+                                                  options={"verify_signature": False},
+                                                  leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
             iss = unverified_decoded_jwt.get('iss')
             if not iss:
                 return jsonify({'active': False})

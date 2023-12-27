@@ -63,6 +63,8 @@ OIDC_JWT_PUBLIC_KEY = envget_str('OIDC_JWT_PUBLIC_KEY', '')
 OIDC_JWT_PRIVATE_KEY = envget_str('OIDC_JWT_PRIVATE_KEY', '')
 OIDC_JWT_EXP_TIME_ACCESS_TOKEN = envget_int('OIDC_JWT_EXP_TIME_ACCESS_TOKEN', 300)
 
+JWT_VALIDATION_LEEWAY = envget_int('JWT_VALIDATION_LEEWAY', 10)
+
 # IdP is used to retrieve the id_token of the logged-in user
 IDP_AUTHORIZE_ENDPOINT = envget_str('IDP_AUTHORIZE_ENDPOINT', 'https://iam.koppeltaal.headease.nl/realms/Koppeltaal2/protocol/openid-connect/auth')
 IDP_TOKEN_ENDPOINT = envget_str('IDP_TOKEN_ENDPOINT', 'https://iam.koppeltaal.headease.nl/realms/Koppeltaal2/protocol/openid-connect/token')
