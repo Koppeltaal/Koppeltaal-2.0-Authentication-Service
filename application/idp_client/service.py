@@ -93,7 +93,7 @@ class IdpService:
 
         logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
 
-        fhir_logging_service.register_idp_interaction(f'Patient/{launching_user_resource["id"]}', trace_headers)
+        fhir_logging_service.register_idp_interaction(f'Patient/{launching_user_resource["id"]}', oauth2_session.client_id, trace_headers)
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302

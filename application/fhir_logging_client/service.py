@@ -15,11 +15,11 @@ logger.setLevel(logging.DEBUG)
 class FhirLoggingService:
 
     @staticmethod
-    def register_idp_interaction(entity_what_reference: str, trace_headers: dict):
+    def register_idp_interaction(entity_what_reference: str, requesting_client_id: str, trace_headers: dict):
 
         logger.info(f"Registering idp interaction for entity: [{entity_what_reference}]")
 
-        audit_event = FhirLoggingService._get_audit_event(entity_what_reference, trace_headers)
+        audit_event = FhirLoggingService._get_audit_event(entity_what_reference, requesting_client_id, trace_headers)
         access_token = token_service.get_system_access_token()
 
         endpoint = f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/AuditEvent'
@@ -38,7 +38,7 @@ class FhirLoggingService:
         return response
 
     @staticmethod
-    def _get_audit_event(entity_what_reference: str, trace_headers: dict):
+    def _get_audit_event(entity_what_reference: str, requesting_client_id: str, trace_headers: dict):
 
         entity_type = entity_what_reference.split("/")[0]
         if entity_type != "Patient" and entity_type != "Practitioner":
@@ -92,14 +92,14 @@ class FhirLoggingService:
                         ]
                     },
                     "who": {
-                        "reference": f"Device/{current_app.config['SMART_BACKEND_SERVICE_DEVICE_ID']}",
+                        "reference": f"Device/{requesting_client_id}",
                         "type": "Device"
                     },
                     "requestor": True
                 }
             ],
             "source": {
-                "site": "DEFAULT tenant",
+                "site": current_app.config['AUTH_SERVER_ISS'],
                 "observer": {
                     "reference": f"Device/{current_app.config['SMART_BACKEND_SERVICE_DEVICE_ID']}",
                     "type": "Device"
