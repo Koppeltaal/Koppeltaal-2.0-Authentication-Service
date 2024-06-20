@@ -20,7 +20,9 @@ consumed_jti_tokens = []
 
 
 def verify_token(encoded_token: str, auth_client_id: str) -> Optional[Dict[str, Any]]:
-    unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+    unverified_decoded_jwt = pyjwt.decode(encoded_token,
+                                          options={"verify_signature": False},
+                                          leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
     iss = unverified_decoded_jwt.get('iss', '')
     aud = unverified_decoded_jwt.get('aud', '')
 
@@ -47,7 +49,9 @@ class ClientCredentialsTokenVerifier:
 
     def verify_and_get_token(self, encoded_token, auth_client_id=None):
         try:
-            unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+            unverified_decoded_jwt = pyjwt.decode(encoded_token,
+                                                  options={"verify_signature": False},
+                                                  leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
         except DecodeError as e:
             logger.warning(f"Failed to decode JWT: {e}")
             return
@@ -124,7 +128,9 @@ class HtiTokenVerifier(ClientCredentialsTokenVerifier):
 class AccessTokenVerifier():
     def verify_and_get_token(self, encoded_token):
         try:
-            unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
+            unverified_decoded_jwt = pyjwt.decode(encoded_token,
+                                                  options={"verify_signature": False},
+                                                  leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
         except DecodeError as e:
             logger.warning(f"Failed to decode JWT: {e}")
             return
@@ -158,7 +164,8 @@ def _decode_with_jwks(smart_service, aud, encoded_token) -> Dict[str, Any]:
     signing_key = jwks_client.get_signing_key_from_jwt(encoded_token)
     decoded_jwt = pyjwt.decode(encoded_token, signing_key.key,
                                algorithms=current_app.config['OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                               audience=aud)
+                               audience=aud,
+                               leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
     logger.info(f'JWT for client_id {smart_service.client_id} is decoded by JWKS - valid key')
     return decoded_jwt
 
@@ -176,7 +183,8 @@ def _decode_with_own_key(encoded_token):
     decoded_jwt = pyjwt.decode(encoded_token, public_key.as_pem(),
                                algorithms=current_app.config[
                                    'OIDC_SMART_CONFIG_SIGNING_ALGS'],
-                               options={'verify_aud': False})  # TODO: check if correct
+                               options={'verify_aud': False}, # TODO: check skipping aud is correct
+                               leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
 
     logger.info(f'JWT signed by self is decoded by JWKS - valid key')
     return decoded_jwt
@@ -192,7 +200,8 @@ def _decode_with_public_key(smart_service, aud, encoded_token) -> Dict[str, Any]
 
     decoded_jwt = pyjwt.decode(encoded_token, public_key,
                                algorithms=["RS512"],  ## TODO: check with spec
-                               audience=aud)
+                               audience=aud,
+                               leeway=current_app.config.get('JWT_VALIDATION_LEEWAY', 10))
 
     logger.info(f'JWT for client_id {smart_service.client_id} is decoded by PUBLIC KEY - valid key')
     return decoded_jwt
