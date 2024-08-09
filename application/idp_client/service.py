@@ -109,11 +109,11 @@ class IdpService:
 
         # Firstly, the user itself must not be marked as end-of-life
         if not related_person['active']:
-                logger.error(f'[RelatedPerson/{related_person['id']}] launched, but user marked as inactive')
+                logger.error(f'[RelatedPerson/{related_person["id"]}] launched, but user marked as inactive')
                 return f'Forbidden', 403
             
         if related_person['patient']['reference'] != hti_launch_token['patient']:
-            logger.error(f'[RelatedPerson/{related_person['id']}] launched, but got a patient mismatch: RelatedPerson.patient == {related_person['patient']} and launch.patient == {hti_launch_token['patient']}')
+            logger.error(f'[RelatedPerson/{related_person["id"]}] launched, but got a patient mismatch: RelatedPerson.patient == {related_person["patient"]} and launch.patient == {hti_launch_token["patient"]}')
             return f'Forbidden', 403
 
         # Secondly, we need to ensure the RelatedPerson Task also not marked as end-of-life
@@ -131,7 +131,7 @@ class IdpService:
         task_for = task['for']['reference']
 
         if  task_for != hti_launch_token['patient']:
-            logger.error(f'Task.for [{task_for}] does not match launch token patient [{hti_launch_token['patient']}]')
+            logger.error(f'Task.for [{task_for}] does not match launch token patient [{hti_launch_token["patient"]}]')
             return 'Forbidden', 403
 
         task_owner =  task['owner']['reference']
@@ -158,7 +158,7 @@ class IdpService:
                 logger.error(f'Forbidden, [{launch_sub}] is not a member of the Task.owner [{task_owner}]. Cannot launch [{hti_launch_token["resource"]}]')
                 return 'Forbidden', 403
         else:
-            return 'Bad request, invalid Task.owner for RelatedPerson launch', 400
+            return 'Bad request, invalid Task.owner for RelatedPerson launch', 403
 
 
     def _get_trace_headers(self):
