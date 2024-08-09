@@ -239,6 +239,7 @@ def _test_authorization_code_happy_get(*args, **kwargs):
             return self.json_data
 
     data = {'id': 'idee',
+            'resourceType': 'Practitioner',
             'identifier': [{'value': 'test@example.com'}],
             'authorization_endpoint': 'https://unit.test/idp',
             'token_endpoint': 'https://unit.test/token'
@@ -257,6 +258,7 @@ def _test_authorization_code_with_custom_idp_get(*args, **kwargs):
             return self.json_data
 
     data = {'id': 'idee',
+            'resourceType': 'Practitioner',
             'identifier': [{'value': 'test@example.com'}],
             'authorization_endpoint': 'https://unit.test/idp',
             'token_endpoint': 'https://unit.test/token'}
