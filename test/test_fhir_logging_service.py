@@ -77,6 +77,7 @@ def test_happy(mock1, testing_app: FlaskClient):
     assert 'Authorization' in resp.json()['headers']
     assert 'X-Request-Id' in resp.json()['headers']
 
+
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
 def test_happy_headers(mock1, testing_app: FlaskClient):
 
@@ -104,3 +105,31 @@ def test_happy_headers(mock1, testing_app: FlaskClient):
     assert trace_headers['X-Request-Id'] == resp.json()['headers']['X-Correlation-Id']
     # Trace ID should remain the same
     assert trace_headers['X-Trace-Id'] == resp.json()['headers']['X-Trace-Id']
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_happy_related_person(mock1, testing_app: FlaskClient):
+    """Test logging with a RelatedPerson entity"""
+    
+    testing_app.get("test")
+    resp = fhir_logging_service.register_idp_interaction("RelatedPerson/123", "456", {})
+    
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
+    
+    assert resp_audit_event.entity[0].what.reference == "RelatedPerson/123"
+    assert resp_audit_event.entity[0].role.code == "6"  # Ensure role code is '6' for RelatedPerson
+    assert resp_audit_event.entity[0].role.display == "User"  # Ensure role display is 'User'
+    assert resp_audit_event.agent[0].who.reference == "Device/456"
+    assert resp_audit_event.source.observer.reference == "Device/my-unit-test-auth-server-device-id"
+    assert resp_audit_event.outcome == "0"
+    assert 'Authorization' in resp.json()['headers']
+    assert 'X-Request-Id' in resp.json()['headers']
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_invalid_entity_type(mock1, testing_app: FlaskClient):
+    """Test logging with an invalid entity type, should raise an Exception"""
+    
+    with pytest.raises(Exception, match=r"Cannot log IDP interaction - Entity type must be Patient, Practitioner or RelatedPerson. Got \[InvalidType\] instead."):
+        fhir_logging_service.register_idp_interaction("InvalidType/123", "456", {})

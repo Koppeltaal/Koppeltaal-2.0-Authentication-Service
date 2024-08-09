@@ -41,8 +41,8 @@ class FhirLoggingService:
     def _get_audit_event(entity_what_reference: str, requesting_client_id: str, trace_headers: dict):
 
         entity_type = entity_what_reference.split("/")[0]
-        if entity_type != "Patient" and entity_type != "Practitioner":
-            raise Exception(f"Cannot log IDP interaction - Entity type must be Patient or Practitioner. Got [{entity_type}] instead.")
+        if entity_type != "Patient" and entity_type != "Practitioner" and entity_type != "RelatedPerson":
+            raise Exception(f"Cannot log IDP interaction - Entity type must be Patient, Practitioner or RelatedPerson. Got [{entity_type}] instead.")
 
         extension_ = []
         if 'X-Request-Id' in trace_headers:
@@ -113,8 +113,8 @@ class FhirLoggingService:
                     },
                     "role": {
                         "system": "http://terminology.hl7.org/CodeSystem/object-role",
-                        "code": f"{'1' if entity_type == 'Patient' else '15'}",
-                        "display": entity_type
+                        "code": f"{'1' if entity_type == 'Patient' else '6' if entity_type == 'RelatedPerson' else '15'}",
+                        "display":f"{'User' if entity_type == 'RelatedPerson' else entity_type }",
                     }
                 }
             ]
