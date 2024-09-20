@@ -78,25 +78,25 @@ class IdpService:
 
         headers = new_trace_headers(trace_headers, {"Authorization": "Bearer " + access_token})
 
-        user_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{sub}', headers=headers)
-        if not user_response.ok:
-            logger.error(f'Failed to fetch user {sub} with error code [{user_response.status_code}] and message: \n{user_response.reason}')
+        launching_user_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{sub}', headers=headers)
+        if not launching_user_response.ok:
+            logger.error(f'Failed to fetch user {sub} with error code [{launching_user_response.status_code}] and message: \n{launching_user_response.reason}')
             return 'Bad request, user could not be fetched from store', 400
 
-        launching_user_resource = user_response.json()
+        launching_user_resource = launching_user_response.json()
         logger.debug(f'[{oauth2_session.id}] Found user resource from the fhir server with reference [{sub}]\n\nuser: {str(launching_user_resource)}')
 
         if launching_user_resource['resourceType'] == "RelatedPerson":
             headers = new_trace_headers(headers, {"Authorization": "Bearer " + access_token})
-            result = self.handle_relatedperson_checks(launching_user_resource, hti_launch_token, headers, access_token)
-            if result: 
-                return result
+            error = self.handle_relatedperson_checks(launching_user_resource, hti_launch_token, headers, access_token)
+            if error: 
+                return error
 
         identifiers = launching_user_resource['identifier']
         values = [identifier['value'] for identifier in identifiers if 'value' in identifier]
         if user_identifier not in values:
             logger.error(f'[{oauth2_session.id}] user id mismatch, expected [{user_identifier}] but found {str(values)}')
-            return f'Forbidden, patient identifier [{user_identifier}] not found on [Patient/{launching_user_resource["id"]}]', 403
+            return f'Forbidden, patient identifier [{user_identifier}] not found on [{sub}]', 403
 
         logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
 
