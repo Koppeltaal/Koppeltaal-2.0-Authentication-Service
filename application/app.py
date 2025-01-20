@@ -102,7 +102,9 @@ def create_app(config=None) -> Flask:
     register_error_handlers(app)
     setup_database(app)
     ensure_oidc_keys(app)
-    ensure_device(app)
+    with app.app_context():
+        if not 'TESTING' in app.config:
+            ensure_device(app)
     cors = CORS(app, resources={r"/oauth2/*": {"origins": "*"}}, supports_credentials=True)
     db = SQLAlchemy(app)
     return app
