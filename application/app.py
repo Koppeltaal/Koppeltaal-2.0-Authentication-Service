@@ -3,7 +3,10 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import logging
+from urllib import response
 
+import requests
 from authlib.jose import JsonWebKey, Key
 from flask import Flask
 from flask_behind_proxy import FlaskBehindProxy
@@ -12,6 +15,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 from application import oauth_server, jwks, idp_client
 from application.database import db
+from .fhir_logging_client.service import token_service
 from .utils import get_private_key_as_pem, get_public_key_as_pem
 
 
@@ -41,6 +45,49 @@ def _has_config_key_set(app, cnfg_key_name):
     return cnfg_key_name in app.config and len(app.config[cnfg_key_name]) > 0
 
 
+def ensure_device(app):
+    access_token = token_service.get_system_access_token()
+
+    headers = {"Authorization": "Bearer " + access_token}
+    ## First test if the device can be found with the own credentials
+    device_response = requests.get(
+        f'{app.config["FHIR_CLIENT_SERVERURL"]}/Device/{app.config["SMART_BACKEND_SERVICE_CLIENT_ID"]}',
+        headers=headers)
+    if not device_response.status_code == 404:
+        ## If the device cannot be located, attempt to create one WITHOUT a security context, assuming the
+        ## FHIR server security is disabled to bootstrap the domain.
+        logging.log(logging.WARN, "Attempting to create the device without security context")
+        device_response = requests.put(f'{app.config["FHIR_CLIENT_SERVERURL"]}/Device/{app.config["SMART_BACKEND_SERVICE_CLIENT_ID"]}', json={
+            "resourceType": "Device",
+            "id": app.config["SMART_BACKEND_SERVICE_CLIENT_ID"],
+            "meta": {
+                "profile": [
+                    "http://koppeltaal.nl/fhir/StructureDefinition/KT2Device"
+                ]
+            },
+            "identifier": [
+                {
+                    "system": "http://vzvz.nl/fhir/NamingSystem/koppeltaal-client-id",
+                    "value": app.config["SMART_BACKEND_SERVICE_CLIENT_ID"],
+                }
+            ],
+            "status": "active",
+            "deviceName": [
+                {
+                    "name": "Auth Service",
+                    "type": "user-friendly-name"
+                }
+            ]
+        })
+        if not device_response.ok:
+            raise "Failed to create device with id " + app.config["SMART_BACKEND_SERVICE_CLIENT_ID"] + " in FHIR server. Please disable the security in the FHIR server and try again."
+        else:
+            logging.log(logging.WARN, "Succeeded to create the device without security context")
+    elif not device_response.ok:
+        raise "Failed to find device with id " + app.config["SMART_BACKEND_SERVICE_CLIENT_ID"] + " in FHIR server. Status code is: " + str(device_response.status_code) + "."
+
+
+
 def create_app(config=None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     FlaskBehindProxy(app)
@@ -55,6 +102,7 @@ def create_app(config=None) -> Flask:
     register_error_handlers(app)
     setup_database(app)
     ensure_oidc_keys(app)
+    ensure_device(app)
     cors = CORS(app, resources={r"/oauth2/*": {"origins": "*"}}, supports_credentials=True)
     db = SQLAlchemy(app)
     return app
