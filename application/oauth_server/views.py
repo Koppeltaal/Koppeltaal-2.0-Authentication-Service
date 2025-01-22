@@ -81,9 +81,13 @@ def create_blueprint() -> Blueprint:
                               "login": "true"}
 
                 # Check if the smart service has a custom IDP
+                if not "sub" in launch_token:
+                    logger.info(
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - No `sub` field in launch token.")
+                    return 'Bad Request, invalid launch token', 400
                 launch_sub: str = launch_token['sub']
 
-                if launch_sub and launch_sub.startswith('Practitioner') and smart_service and smart_service.practitioner_idp:
+                if launch_sub.startswith('Practitioner') and smart_service and smart_service.practitioner_idp:
                     logger.info(
                         f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for Practitioners.")
                     identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
@@ -95,7 +99,7 @@ def create_blueprint() -> Blueprint:
                     data = requests.get(identity_provider.openid_config_endpoint).json()
                     return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
-                if launch_sub and launch_sub.startswith('Patient') and smart_service and smart_service.patient_idp:
+                if launch_sub.startswith('Patient') and smart_service and smart_service.patient_idp:
                     logger.info(
                         f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for Patients.")
                     identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
@@ -107,9 +111,21 @@ def create_blueprint() -> Blueprint:
 
                     data = requests.get(identity_provider.openid_config_endpoint).json()
                     return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
+                if launch_sub.startswith('RelatedPerson') and smart_service and smart_service.patient_idp:
+                    logger.info(
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for RelatedPerson.")
+                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
+                        id=smart_service.related_person_idp).first()
+                    oauth2_session.identity_provider = identity_provider.id
+                    db.session.commit()
+
+                    parameters['client_id'] = identity_provider.client_id
+
+                    data = requests.get(identity_provider.openid_config_endpoint).json()
+                    return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
                 # Otherwise send to the default IDP
-                logger.info(f"/oauth2/authorize smart service [{smart_service.id}] - no custom idp found or `sub` not a Patient or Practitioner")
+                logger.info(f"/oauth2/authorize smart service [{smart_service.id}] - no custom idp found or `sub` not a Patient, RelatedPerson or Practitioner")
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
             else:
                 return redirect(
