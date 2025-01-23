@@ -114,6 +114,10 @@ class SmartService(db.Model):
         REFERENCES public.identity_provider (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
+    CONSTRAINT related_person_idp_fk FOREIGN KEY (related_person_idp)
+        REFERENCES public.identity_provider (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
     CONSTRAINT practitioner_idp_fk FOREIGN KEY (practitioner_idp)
         REFERENCES public.identity_provider (id) MATCH SIMPLE
         ON UPDATE NO ACTION
