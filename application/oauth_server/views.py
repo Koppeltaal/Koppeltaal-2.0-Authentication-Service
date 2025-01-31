@@ -47,6 +47,7 @@ def create_blueprint() -> Blueprint:
         oauth2_session.type = 'smart_hti_on_fhir'
         scope = request.values.get('scope', LAUNCH_SCOPE_DEFAULT)
         oauth2_session.scope = scope
+        oauth2_session.prompt = request.values.get('prompt', None)
         oauth2_session.code_challenge = request.values.get('code_challenge')
         oauth2_session.code_challenge_method = request.values.get('code_challenge_method')
         oauth2_session.response_type = request.values.get('response_type')
@@ -79,6 +80,9 @@ def create_blueprint() -> Blueprint:
                               "redirect_uri": current_app.config["IDP_AUTHORIZE_REDIRECT_URL"],
                               "scope": "openid",
                               "login": "true"}
+
+                if oauth2_session.prompt in ['none', 'login', 'consent', 'select_account'] :
+                    parameters['prompt'] = oauth2_session.prompt
 
                 # Check if the smart service has a custom IDP
                 if not "sub" in launch_token:
