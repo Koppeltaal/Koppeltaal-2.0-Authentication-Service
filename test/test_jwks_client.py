@@ -21,13 +21,16 @@ def test_fetch_data_200(mocker):
 
 def test_fetch_data_error1(mocker):
     class ResponseObj:
+        status_code = 400
         def __enter__(self):
-            return CachedResponse(content='{"ok": true}'.encode('utf8'), status_code=400)
+            return CachedResponse(content='{"ok": true}'.encode('utf8'), status_code=self.status_code)
 
         def __exit__(self, exc_type, exc_val, exc_tb):
             pass
 
+
     mocker.patch('requests_cache.CachedSession.get', return_value=ResponseObj())
+    mocker.patch('requests.get', return_value=ResponseObj())
 
     client = CacheHeaderPyJWKClient("http://nonexist.com/.well-known/jwks.json")
     with pytest.raises(PyJWKClientError):
@@ -36,13 +39,16 @@ def test_fetch_data_error1(mocker):
 
 def test_fetch_data_error2(mocker):
     class ResponseObj:
+        status_code = 400
         def __enter__(self):
-            return CachedResponse(content='{"ok": FAIL}'.encode('utf8'), status_code=400)
+            return CachedResponse(content='{"ok": FAIL}'.encode('utf8'), status_code=self.status_code)
 
         def __exit__(self, exc_type, exc_val, exc_tb):
             pass
 
+
     mocker.patch('requests_cache.CachedSession.get', return_value=ResponseObj())
+    mocker.patch('requests.get', return_value=ResponseObj())
 
     client = CacheHeaderPyJWKClient("http://nonexist.com/.well-known/jwks.json")
     with pytest.raises(PyJWKClientError):
