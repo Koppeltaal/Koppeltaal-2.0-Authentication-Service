@@ -1,4 +1,4 @@
-FROM python:3.8.17
+FROM python:3.9
 ENV TZ="Europe/Amsterdam"
 
 RUN pip install poetry
