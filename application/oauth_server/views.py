@@ -115,7 +115,7 @@ def create_blueprint() -> Blueprint:
 
                     data = requests.get(identity_provider.openid_config_endpoint).json()
                     return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
-                if launch_sub.startswith('RelatedPerson') and smart_service and smart_service.patient_idp:
+                if launch_sub.startswith('RelatedPerson') and smart_service and smart_service.related_person_idp:
                     logger.info(
                         f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for RelatedPerson.")
                     identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
