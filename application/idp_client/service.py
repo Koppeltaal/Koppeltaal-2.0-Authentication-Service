@@ -89,7 +89,7 @@ class IdpService:
         if launching_user_resource['resourceType'] == "RelatedPerson":
             headers = new_trace_headers(headers, {"Authorization": "Bearer " + access_token})
             error = self.handle_relatedperson_checks(launching_user_resource, hti_launch_token, headers, access_token)
-            if error: 
+            if error:
                 return error
 
         identifiers = launching_user_resource['identifier']
@@ -106,59 +106,9 @@ class IdpService:
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302
 
     def handle_relatedperson_checks(self, related_person, hti_launch_token, headers, access_token):
-
-        # Firstly, the user itself must not be marked as end-of-life
-        if not related_person['active']:
-                logger.error(f'[RelatedPerson/{related_person["id"]}] launched, but user marked as inactive')
-                return f'Forbidden', 403
-            
         if related_person['patient']['reference'] != hti_launch_token['patient']:
             logger.error(f'[RelatedPerson/{related_person["id"]}] launched, but got a patient mismatch: RelatedPerson.patient == {related_person["patient"]} and launch.patient == {hti_launch_token["patient"]}')
             return f'Forbidden', 403
-
-        # Secondly, we need to ensure the RelatedPerson Task also not marked as end-of-life
-        task_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{hti_launch_token["resource"]}', headers=headers)
-        if not task_response.ok:
-            logger.error(f'Failed to fetch {hti_launch_token["resource"]} with error code [{task_response.status_code}] and message: \n{task_response.reason}')
-            return 'Bad request, Task could not be fetched from store', 400
-
-        task = task_response.json()
-        
-        if task['status'] == 'cancelled':
-            logger.error(f'[{hti_launch_token["resource"]}] has been marked as end-of-life (cancelled). Cannot launch.')
-            return 'Forbidden', 403
-        
-        task_for = task['for']['reference']
-
-        if  task_for != hti_launch_token['patient']:
-            logger.error(f'Task.for [{task_for}] does not match launch token patient [{hti_launch_token["patient"]}]')
-            return 'Forbidden', 403
-
-        task_owner =  task['owner']['reference']
-        launch_sub = hti_launch_token['sub']
-
-        if task_owner.startswith("RelatedPerson/"):
-            assert task_owner == launch_sub
-        elif task_owner.startswith("CareTeam/"):
-            headers = new_trace_headers(headers, {"Authorization": "Bearer " + access_token})
-            careteam_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{task_owner}', headers=headers)
-
-            if not careteam_response.ok:
-                logger.error(f'Failed to fetch {task_owner} with error code [{careteam_response.status_code}] and message: \n{careteam_response.reason}')
-                return 'Bad request, CareTeam could not be fetched from store to validate access', 400
-
-            careteam = careteam_response.json()
-            if careteam['status'] != 'active':
-                logger.error(f'Forbidden, [{task_owner}] is inactive. Cannot launch [{hti_launch_token["resource"]}]')
-                return 'Forbidden', 403
-
-            participant_references = [participant['member']['reference'] for participant in careteam['participant']]
-
-            if launch_sub not in participant_references:
-                logger.error(f'Forbidden, [{launch_sub}] is not a member of the Task.owner [{task_owner}]. Cannot launch [{hti_launch_token["resource"]}]')
-                return 'Forbidden', 403
-        else:
-            return 'Bad request, invalid Task.owner for RelatedPerson launch', 403
 
 
     def _get_trace_headers(self):
