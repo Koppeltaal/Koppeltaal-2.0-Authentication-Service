@@ -267,13 +267,13 @@ def _mock_related_person(related_person_response, task_response, careteam_respon
     if 'Task' in args[0]:
         if not task_response:
             return MockResponse(task_response, 404)
-            
+
         return MockResponse(task_response, 200)
 
     if 'CareTeam' in args[0]:
         if not careteam_response:
             return MockResponse(careteam_response, 404)
-            
+
         return MockResponse(careteam_response, 200)
 
     return MockResponse({}, 404, reason="Not Found")
@@ -294,7 +294,7 @@ class MockResponse:
 @mock.patch('requests.get')
 def test_related_person_launch_happy_path(mock_get, mock_post, active_related_person, task_response_related_person_owner, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(active_related_person, task_response_related_person_owner, None, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -327,9 +327,9 @@ def test_related_person_launch_happy_path(mock_get, mock_post, active_related_pe
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
-def test_related_person_inactive(mock_get, mock_post, inactive_related_person, task_response_related_person_owner, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
+def test_related_person_inactive_not_checked(mock_get, mock_post, inactive_related_person, task_response_related_person_owner, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(inactive_related_person, task_response_related_person_owner, None, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -342,14 +342,14 @@ def test_related_person_inactive(mock_get, mock_post, inactive_related_person, t
     idp_state = _get_params_from_redirect(authorize_resp, 'state')
     redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
 
-    assert redirect_resp.status_code == 403
+    assert redirect_resp.status_code == 302
 
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
 def test_related_person_identifier_not_matching(mock_get, mock_post, related_person_with_different_identifier, task_response_related_person_owner, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(related_person_with_different_identifier, task_response_related_person_owner, None, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -369,7 +369,7 @@ def test_related_person_identifier_not_matching(mock_get, mock_post, related_per
 @mock.patch('requests.get')
 def test_related_person_patient_not_matching(mock_get, mock_post, related_person_with_different_patient, task_response_related_person_owner, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(related_person_with_different_patient, task_response_related_person_owner, None, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -386,10 +386,10 @@ def test_related_person_patient_not_matching(mock_get, mock_post, related_person
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
-def test_related_person_task_not_found(mock_get, mock_post, active_related_person, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
+def test_related_person_task_not_found_not_checked(mock_get, mock_post, active_related_person, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     # Return 404 for task in the mock
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(active_related_person, None, None, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -402,14 +402,14 @@ def test_related_person_task_not_found(mock_get, mock_post, active_related_perso
     idp_state = _get_params_from_redirect(authorize_resp, 'state')
     redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
 
-    assert redirect_resp.status_code == 400
+    assert redirect_resp.status_code == 302
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
-def test_related_person_task_not_active(mock_get, mock_post, active_related_person, task_response_end_of_life, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
-    
+def test_related_person_task_not_active_not_checked(mock_get, mock_post, active_related_person, task_response_end_of_life, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
+
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(active_related_person, task_response_end_of_life, None, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -422,14 +422,14 @@ def test_related_person_task_not_active(mock_get, mock_post, active_related_pers
     idp_state = _get_params_from_redirect(authorize_resp, 'state')
     redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
 
-    assert redirect_resp.status_code == 403
+    assert redirect_resp.status_code == 302
 
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
 def test_related_person_active_careteam_member(mock_get, mock_post, active_related_person, task_response_careteam_owner, careteam_active_with_member, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(active_related_person, task_response_careteam_owner, careteam_active_with_member, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -462,9 +462,9 @@ def test_related_person_active_careteam_member(mock_get, mock_post, active_relat
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
-def test_related_person_inactive_careteam_member(mock_get, mock_post, active_related_person, task_response_careteam_owner, careteam_inactive_with_member, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
+def test_related_person_inactive_careteam_member_not_checked(mock_get, mock_post, active_related_person, task_response_careteam_owner, careteam_inactive_with_member, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(active_related_person, task_response_careteam_owner, careteam_inactive_with_member, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -477,14 +477,14 @@ def test_related_person_inactive_careteam_member(mock_get, mock_post, active_rel
     idp_state = _get_params_from_redirect(authorize_resp, 'state')
     redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
 
-    assert redirect_resp.status_code == 403
+    assert redirect_resp.status_code == 302
 
 
 @mock.patch('requests.post', side_effect=_mock_related_person_launch_post)
 @mock.patch('requests.get')
-def test_related_person_active_careteam_not_member(mock_get, mock_post, active_related_person, task_response_careteam_owner, careteam_active_without_member, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
+def test_related_person_active_careteam_not_member_not_checked(mock_get, mock_post, active_related_person, task_response_careteam_owner, careteam_active_without_member, testing_app: FlaskClient, client_key: Key, portal_key: Key, client_id: str, portal_id: str, user_id: str, patient_id: str, resource_id: str, smart_service_client: SmartService, smart_service_portal: SmartService, allowed_redirect: AllowedRedirect):
     mock_get.side_effect = lambda *args, **kwargs: _mock_related_person(active_related_person, task_response_careteam_owner, careteam_active_without_member, *args, **kwargs)
-    
+
     state = str(uuid4())
     data = {'scope': 'launch fhirUser openid',
             'redirect_uri': allowed_redirect.url,
@@ -497,4 +497,4 @@ def test_related_person_active_careteam_not_member(mock_get, mock_post, active_r
     idp_state = _get_params_from_redirect(authorize_resp, 'state')
     redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
 
-    assert redirect_resp.status_code == 403
+    assert redirect_resp.status_code == 302
