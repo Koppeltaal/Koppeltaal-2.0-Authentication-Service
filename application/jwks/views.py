@@ -45,4 +45,23 @@ def create_blueprint() -> Blueprint:
                           'context-ehr-hti', 'permission-v2'],
             code_challenge_methods_supported=['S256'])
 
+    @blueprint.route('/.well-known/openid-configuration', methods=['GET'])
+    def openid_configuration():
+        # The current reference implementation uses the FHIR HAPI
+        # server to expose this endpoint, however
+        if not current_app.config.get('OIDC_SMART_CONFIG_ENABLED', False):
+            abort(404)
+
+        return jsonify(
+            issuer=request.url_root,
+            jwks_uri=f'{request.host_url}.well-known/jwks.json',
+            authorization_endpoint=f'{request.host_url}oauth2/authorize',
+            grant_types_supported=['authorization_code', 'client_credentials'],
+            token_endpoint=f'{request.host_url}oauth2/token',
+            token_endpoint_auth_methods_supported=['private_key_jwt'],
+            scopes_supported=["openid"],
+            response_types_supported=['code'],
+            code_challenge_methods_supported=['S256']
+        )
+
     return blueprint
