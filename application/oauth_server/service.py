@@ -51,7 +51,8 @@ class TokenService:
         return self._get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'],
                                    oauth2_token.client_id,
                                    sub=oauth2_token.subject,
-                                   azp=oauth2_token.client_id)
+                                   azp=oauth2_token.client_id,
+                                   fhirUser=oauth2_token.subject)
 
     def get_access_token(self, oauth2_token: Oauth2Token, scope: str) -> str:
         return self._get_jwt_token(current_app.config['OIDC_JWT_EXP_TIME_ACCESS_TOKEN'], 'fhir-server',
@@ -71,7 +72,7 @@ class TokenService:
         return str(uuid4())
 
     def _get_jwt_token(self, expiry: int, aud: str, type: str = None, sub: str = None, email: str = None,
-                       given_name: str = None, family_name: str = None, scope: str = None, azp: str = None) -> str:
+                       given_name: str = None, family_name: str = None, scope: str = None, azp: str = None, fhirUser: str = None) -> str:
         private_key, public_key = keypair_service.get_keypair()
         now = get_timestamp_now()
         payload = {
@@ -87,6 +88,9 @@ class TokenService:
 
         if sub is not None:
             payload['sub'] = sub
+
+        if fhirUser is not None:
+            payload['fhirUser'] = fhirUser
 
         if email is not None:
             payload['email'] = email
