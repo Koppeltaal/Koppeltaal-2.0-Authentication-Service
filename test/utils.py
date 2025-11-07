@@ -23,7 +23,7 @@ def _client_assertion(testing_app: FlaskClient, client_key: Key, client_id: str,
     return jwt.encode(payload, get_private_key_as_pem(client_key), algorithm="RS512")
 
 
-def _hti_token(testing_app: FlaskClient, portal_key: Key, portal_id: str, user_id: str, patient_id: str, resource_id: str, audience:str):
+def _hti_token(testing_app: FlaskClient, portal_key: Key, portal_id: str, user_id: str, patient_id: str, resource_id: str, audience:str, idp_hint: str = None):
     payload = {'iss': portal_id,
                'jti': str(uuid4()),
                'sub': user_id,
@@ -32,6 +32,9 @@ def _hti_token(testing_app: FlaskClient, portal_key: Key, portal_id: str, user_i
 
     if patient_id:
         payload['patient'] = patient_id
+
+    if idp_hint:
+        payload['idp_hint'] = idp_hint
 
     return jwt.encode(payload, get_private_key_as_pem(portal_key), algorithm="RS512")
 

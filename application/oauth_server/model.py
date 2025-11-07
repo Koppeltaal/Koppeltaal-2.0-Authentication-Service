@@ -6,10 +6,29 @@
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, PrimaryKeyConstraint
+from sqlalchemy import ForeignKey, PrimaryKeyConstraint, Table
 
 from application.database import db
 from application.oauth_server.guid import GUID
+
+# Association tables for ManyToMany relationships
+smart_service_patient_idp = Table(
+    'smart_service_patient_idp', db.metadata,
+    db.Column('smart_service_id', GUID(), ForeignKey('smart_service.id'), primary_key=True),
+    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True)
+)
+
+smart_service_practitioner_idp = Table(
+    'smart_service_practitioner_idp', db.metadata,
+    db.Column('smart_service_id', GUID(), ForeignKey('smart_service.id'), primary_key=True),
+    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True)
+)
+
+smart_service_related_person_idp = Table(
+    'smart_service_related_person_idp', db.metadata,
+    db.Column('smart_service_id', GUID(), ForeignKey('smart_service.id'), primary_key=True),
+    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True)
+)
 
 class Oauth2Session(db.Model):
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
@@ -135,9 +154,11 @@ class SmartService(db.Model):
     role_id = db.Column(GUID(), ForeignKey(Role.id))
     name = db.Column(db.String(255))
     fhir_store_device_id = db.Column(db.String(255))
-    patient_idp = db.Column(GUID(), ForeignKey('identity_provider.id'))
-    related_person_idp = db.Column(GUID(), ForeignKey('identity_provider.id'))
-    practitioner_idp = db.Column(GUID(), ForeignKey('identity_provider.id'))
+
+    # ManyToMany relationships with IdentityProvider
+    patient_idps = db.relationship('IdentityProvider', secondary=smart_service_patient_idp, backref='smart_services_patient')
+    practitioner_idps = db.relationship('IdentityProvider', secondary=smart_service_practitioner_idp, backref='smart_services_practitioner')
+    related_person_idps = db.relationship('IdentityProvider', secondary=smart_service_related_person_idp, backref='smart_services_related_person')
 
 
 class Permission(db.Model):

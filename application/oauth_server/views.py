@@ -91,45 +91,70 @@ def create_blueprint() -> Blueprint:
                     return 'Bad Request, invalid launch token', 400
                 launch_sub: str = launch_token['sub']
 
-                if launch_sub.startswith('Practitioner') and smart_service and smart_service.practitioner_idp:
+                # Get idp_hint from launch token
+                idp_hint = launch_token.get('idp_hint')
+
+                # no custom idp requested - directly use the default
+                if not idp_hint:
                     logger.info(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for Practitioners.")
-                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
-                        id=smart_service.practitioner_idp).first()
-                    oauth2_session.identity_provider = identity_provider.id
-                    db.session.commit()
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - No idp_hint provided in launch token.")
+                    return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
 
-                    parameters['client_id'] = identity_provider.client_id
-                    data = requests.get(identity_provider.openid_config_endpoint).json()
-                    return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
+                if launch_sub.startswith('Practitioner') and smart_service:
+                    if smart_service.practitioner_idps:
+                        # Check if the hinted IDP is in the allowed list
+                        for idp in smart_service.practitioner_idps:
+                            if str(idp.id) == idp_hint:
+                                logger.info(
+                                    f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using idp_hint [{idp_hint}] for Practitioners.")
+                                identity_provider: IdentityProvider = idp
+                                oauth2_session.identity_provider = identity_provider.id
+                                db.session.commit()
 
-                if launch_sub.startswith('Patient') and smart_service and smart_service.patient_idp:
-                    logger.info(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for Patients.")
-                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
-                        id=smart_service.patient_idp).first()
-                    oauth2_session.identity_provider = identity_provider.id
-                    db.session.commit()
+                                parameters['client_id'] = identity_provider.client_id
+                                data = requests.get(identity_provider.openid_config_endpoint).json()
+                                return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
-                    parameters['client_id'] = identity_provider.client_id
+                    logger.warn(
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - idp_hint [{idp_hint}] not found in allowed Practitioner IDPs, using default IDP.")
 
-                    data = requests.get(identity_provider.openid_config_endpoint).json()
-                    return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
-                if launch_sub.startswith('RelatedPerson') and smart_service and smart_service.related_person_idp:
-                    logger.info(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using custom idp for RelatedPerson.")
-                    identity_provider: IdentityProvider = IdentityProvider.query.filter_by(
-                        id=smart_service.related_person_idp).first()
-                    oauth2_session.identity_provider = identity_provider.id
-                    db.session.commit()
+                if launch_sub.startswith('Patient') and smart_service:
+                    if smart_service.patient_idps:
+                        # Check if the hinted IDP is in the allowed list
+                        for idp in smart_service.patient_idps:
+                            if str(idp.id) == idp_hint:
+                                logger.info(
+                                    f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using idp_hint [{idp_hint}] for Patients.")
+                                identity_provider: IdentityProvider = idp
+                                oauth2_session.identity_provider = identity_provider.id
+                                db.session.commit()
 
-                    parameters['client_id'] = identity_provider.client_id
+                                parameters['client_id'] = identity_provider.client_id
+                                data = requests.get(identity_provider.openid_config_endpoint).json()
+                                return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
-                    data = requests.get(identity_provider.openid_config_endpoint).json()
-                    return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
+                    logger.warn(
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - idp_hint [{idp_hint}] not found in allowed Patient IDPs, using default IDP.")
 
-                # Otherwise send to the default IDP
-                logger.info(f"/oauth2/authorize smart service [{smart_service.id}] - no custom idp found or `sub` not a Patient, RelatedPerson or Practitioner")
+                if launch_sub.startswith('RelatedPerson') and smart_service:
+                    if smart_service.related_person_idps:
+                        # Check if the hinted IDP is in the allowed list
+                        for idp in smart_service.related_person_idps:
+                            if str(idp.id) == idp_hint:
+                                logger.info(
+                                    f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using idp_hint [{idp_hint}] for RelatedPerson.")
+                                identity_provider: IdentityProvider = idp
+                                oauth2_session.identity_provider = identity_provider.id
+                                db.session.commit()
+
+                                parameters['client_id'] = identity_provider.client_id
+                                data = requests.get(identity_provider.openid_config_endpoint).json()
+                                return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
+
+                    logger.warn(
+                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - idp_hint [{idp_hint}] not found in allowed RelatedPerson IDPs, using default IDP.")
+
+                # idp_hint was provided, but no matching custom idp found - use default
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
             else:
                 return redirect(

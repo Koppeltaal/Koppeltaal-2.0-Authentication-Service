@@ -83,9 +83,9 @@ def smart_service_client(testing_app: FlaskClient, client_key: Key, client_id: s
                                         client_id=client_id,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=client_id,
-                                        patient_idp=identity_provider.id,
-                                        practitioner_idp=identity_provider.id)
+                                        fhir_store_device_id=client_id)
+    smart_service_client.patient_idps = [identity_provider]
+    smart_service_client.practitioner_idps = [identity_provider]
     db.session.add(smart_service_client)
     db.session.commit()
     yield smart_service_client
@@ -98,9 +98,9 @@ def smart_service_portal(portal_key: Key, portal_id: str, identity_provider: Ide
                                         client_id=portal_id,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=portal_id,
-                                        patient_idp=identity_provider.id,
-                                        practitioner_idp=identity_provider.id)
+                                        fhir_store_device_id=portal_id)
+    smart_service_portal.patient_idps = [identity_provider]
+    smart_service_portal.practitioner_idps = [identity_provider]
     db.session.add(smart_service_portal)
     db.session.commit()
     yield smart_service_portal
@@ -113,9 +113,9 @@ def smart_service_custom_idp(identity_provider, client_key: Key, client_id_idp: 
                                         client_id=client_id_idp,
                                         status=SmartServiceStatus.APPROVED,
                                         public_key=public_key_bytes.decode('utf8'),
-                                        fhir_store_device_id=client_id_idp,
-                                        patient_idp=identity_provider.id,
-                                        practitioner_idp=identity_provider.id)
+                                        fhir_store_device_id=client_id_idp)
+    smart_service_custom_idp.patient_idps = [identity_provider]
+    smart_service_custom_idp.practitioner_idps = [identity_provider]
     print("custom idp met client_id: ", client_id_idp)
     print("custom idp met client_id: ", smart_service_custom_idp.client_id)
     db.session.add(smart_service_custom_idp)
@@ -340,6 +340,7 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
                                             smart_service_client: SmartService,
                                             smart_service_portal: SmartService,
                                             smart_service_custom_idp: SmartService,
+                                            identity_provider: IdentityProvider,
                                             custom_idp_location: str,
                                             allowed_redirect: AllowedRedirect):
     module_state = str(uuid4())
@@ -347,7 +348,7 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
             'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_custom_idp.client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_custom_idp.fhir_store_device_id}'),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_custom_idp.fhir_store_device_id}', idp_hint=str(identity_provider.id)),
             'state': module_state}
 
     ## AUTHORIZE
@@ -369,7 +370,6 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
             'client_assertion': _client_assertion(testing_app, client_key, smart_service_custom_idp.client_id),
             'code': token_code,
             'state': token_state,
-            'code_verifier': code_verifier,
             'redirect_uri': allowed_redirect.url,
             'grant_type': 'authorization_code'}
 
