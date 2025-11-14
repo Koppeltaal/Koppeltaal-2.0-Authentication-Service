@@ -25,6 +25,63 @@ logger = logging.getLogger('oauth_views')
 logger.setLevel(logging.DEBUG)
 
 
+def select_identity_provider(smart_service, launch_token):
+    """
+    Select the appropriate Identity Provider based on launch token and smart service configuration.
+
+    Args:
+        smart_service: SmartService instance with IDP configurations
+        launch_token: Dict containing launch token claims (must have 'sub', optionally 'idp_hint')
+
+    Returns:
+        IdentityProvider instance if custom IDP selected, None if default KT2 IDP should be used
+
+    Raises:
+        ValueError: If launch token is missing required 'sub' field
+    """
+    if not launch_token.get('sub'):
+        raise ValueError("Launch token missing required 'sub' field")
+
+    launch_sub = launch_token['sub']
+    idp_hint = launch_token.get('idp_hint')
+
+    # Determine which IDP list to use based on actor type
+    actor_idps = []
+    actor_type = None
+    if launch_sub.startswith('Practitioner') and smart_service:
+        actor_idps = smart_service.practitioner_idps
+        actor_type = 'Practitioner'
+    elif launch_sub.startswith('Patient') and smart_service:
+        actor_idps = smart_service.patient_idps
+        actor_type = 'Patient'
+    elif launch_sub.startswith('RelatedPerson') and smart_service:
+        actor_idps = smart_service.related_person_idps
+        actor_type = 'RelatedPerson'
+
+    # Try to use the hinted IDP if provided and valid
+    selected_idp = None
+    if idp_hint and actor_idps:
+        for idp in actor_idps:
+            if str(idp.id) == idp_hint:
+                selected_idp = idp
+                logger.info(f"Using idp_hint [{idp_hint}] for {actor_type}.")
+                break
+
+    # Fallback to first IDP in list (ordered by idp_order) if hint invalid or not provided
+    if not selected_idp and actor_idps:
+        selected_idp = actor_idps[0]
+        if idp_hint:
+            logger.info(f"idp_hint [{idp_hint}] not found for {actor_type}, using first IDP [{selected_idp.id}].")
+        else:
+            logger.info(f"No idp_hint provided for {actor_type}, using first IDP [{selected_idp.id}].")
+
+    # Return selected IDP or None (indicating default KT2 IDP should be used)
+    if not selected_idp:
+        logger.info(f"No custom IDPs configured for {actor_type}, will use default Koppeltaal IDP.")
+
+    return selected_idp
+
+
 def create_blueprint() -> Blueprint:
     blueprint = Blueprint(__name__.split('.')[-2], __name__)
 
@@ -84,77 +141,24 @@ def create_blueprint() -> Blueprint:
                 if oauth2_session.prompt in ['none', 'login', 'consent', 'select_account'] :
                     parameters['prompt'] = oauth2_session.prompt
 
-                # Check if the smart service has a custom IDP
+                # Select appropriate IDP based on launch token and smart service configuration
                 if not "sub" in launch_token:
                     logger.info(
                         f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - No `sub` field in launch token.")
                     return 'Bad Request, invalid launch token', 400
-                launch_sub: str = launch_token['sub']
 
-                # Get idp_hint from launch token
-                idp_hint = launch_token.get('idp_hint')
+                selected_idp = select_identity_provider(smart_service, launch_token)
 
-                # no custom idp requested - directly use the default
-                if not idp_hint:
-                    logger.info(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - No idp_hint provided in launch token.")
-                    return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
+                # Use custom IDP if one was selected
+                if selected_idp:
+                    oauth2_session.identity_provider = selected_idp.id
+                    db.session.commit()
 
-                if launch_sub.startswith('Practitioner') and smart_service:
-                    if smart_service.practitioner_idps:
-                        # Check if the hinted IDP is in the allowed list
-                        for idp in smart_service.practitioner_idps:
-                            if str(idp.id) == idp_hint:
-                                logger.info(
-                                    f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using idp_hint [{idp_hint}] for Practitioners.")
-                                identity_provider: IdentityProvider = idp
-                                oauth2_session.identity_provider = identity_provider.id
-                                db.session.commit()
+                    parameters['client_id'] = selected_idp.client_id
+                    data = requests.get(selected_idp.openid_config_endpoint).json()
+                    return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
-                                parameters['client_id'] = identity_provider.client_id
-                                data = requests.get(identity_provider.openid_config_endpoint).json()
-                                return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
-
-                    logger.warn(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - idp_hint [{idp_hint}] not found in allowed Practitioner IDPs, using default IDP.")
-
-                if launch_sub.startswith('Patient') and smart_service:
-                    if smart_service.patient_idps:
-                        # Check if the hinted IDP is in the allowed list
-                        for idp in smart_service.patient_idps:
-                            if str(idp.id) == idp_hint:
-                                logger.info(
-                                    f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using idp_hint [{idp_hint}] for Patients.")
-                                identity_provider: IdentityProvider = idp
-                                oauth2_session.identity_provider = identity_provider.id
-                                db.session.commit()
-
-                                parameters['client_id'] = identity_provider.client_id
-                                data = requests.get(identity_provider.openid_config_endpoint).json()
-                                return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
-
-                    logger.warn(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - idp_hint [{idp_hint}] not found in allowed Patient IDPs, using default IDP.")
-
-                if launch_sub.startswith('RelatedPerson') and smart_service:
-                    if smart_service.related_person_idps:
-                        # Check if the hinted IDP is in the allowed list
-                        for idp in smart_service.related_person_idps:
-                            if str(idp.id) == idp_hint:
-                                logger.info(
-                                    f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - Using idp_hint [{idp_hint}] for RelatedPerson.")
-                                identity_provider: IdentityProvider = idp
-                                oauth2_session.identity_provider = identity_provider.id
-                                db.session.commit()
-
-                                parameters['client_id'] = identity_provider.client_id
-                                data = requests.get(identity_provider.openid_config_endpoint).json()
-                                return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
-
-                    logger.warn(
-                        f"/oauth2/authorize with client_id [{request.values.get('client_id')}] - idp_hint [{idp_hint}] not found in allowed RelatedPerson IDPs, using default IDP.")
-
-                # idp_hint was provided, but no matching custom idp found - use default
+                # No custom IDPs configured - use default Koppeltaal IDP
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
             else:
                 return redirect(

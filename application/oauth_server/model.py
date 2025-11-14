@@ -11,23 +11,26 @@ from sqlalchemy import ForeignKey, PrimaryKeyConstraint, Table
 from application.database import db
 from application.oauth_server.guid import GUID
 
-# Association tables for ManyToMany relationships
+# Association tables for ManyToMany relationships with ordering
 smart_service_patient_idp = Table(
     'smart_service_patient_idp', db.metadata,
     db.Column('smart_service_id', GUID(), ForeignKey('smart_service.id'), primary_key=True),
-    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True)
+    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True),
+    db.Column('idp_order', db.Integer, nullable=False, default=0)
 )
 
 smart_service_practitioner_idp = Table(
     'smart_service_practitioner_idp', db.metadata,
     db.Column('smart_service_id', GUID(), ForeignKey('smart_service.id'), primary_key=True),
-    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True)
+    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True),
+    db.Column('idp_order', db.Integer, nullable=False, default=0)
 )
 
 smart_service_related_person_idp = Table(
     'smart_service_related_person_idp', db.metadata,
     db.Column('smart_service_id', GUID(), ForeignKey('smart_service.id'), primary_key=True),
-    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True)
+    db.Column('identity_provider_id', GUID(), ForeignKey('identity_provider.id'), primary_key=True),
+    db.Column('idp_order', db.Integer, nullable=False, default=0)
 )
 
 class Oauth2Session(db.Model):
@@ -155,10 +158,10 @@ class SmartService(db.Model):
     name = db.Column(db.String(255))
     fhir_store_device_id = db.Column(db.String(255))
 
-    # ManyToMany relationships with IdentityProvider
-    patient_idps = db.relationship('IdentityProvider', secondary=smart_service_patient_idp, backref='smart_services_patient')
-    practitioner_idps = db.relationship('IdentityProvider', secondary=smart_service_practitioner_idp, backref='smart_services_practitioner')
-    related_person_idps = db.relationship('IdentityProvider', secondary=smart_service_related_person_idp, backref='smart_services_related_person')
+    # ManyToMany relationships with IdentityProvider, ordered by idp_order
+    patient_idps = db.relationship('IdentityProvider', secondary=smart_service_patient_idp, backref='smart_services_patient', order_by=smart_service_patient_idp.c.idp_order)
+    practitioner_idps = db.relationship('IdentityProvider', secondary=smart_service_practitioner_idp, backref='smart_services_practitioner', order_by=smart_service_practitioner_idp.c.idp_order)
+    related_person_idps = db.relationship('IdentityProvider', secondary=smart_service_related_person_idp, backref='smart_services_related_person', order_by=smart_service_related_person_idp.c.idp_order)
 
 
 class Permission(db.Model):
