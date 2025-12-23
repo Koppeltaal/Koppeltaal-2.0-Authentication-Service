@@ -62,7 +62,7 @@ def select_identity_provider(smart_service, launch_token):
     selected_idp = None
     if idp_hint and actor_idps:
         for idp in actor_idps:
-            if str(idp.id) == idp_hint:
+            if idp.logical_identifier == idp_hint:
                 selected_idp = idp
                 logger.info(f"Using idp_hint [{idp_hint}] for {actor_type}.")
                 break
@@ -71,9 +71,9 @@ def select_identity_provider(smart_service, launch_token):
     if not selected_idp and actor_idps:
         selected_idp = actor_idps[0]
         if idp_hint:
-            logger.info(f"idp_hint [{idp_hint}] not found for {actor_type}, using first IDP [{selected_idp.id}].")
+            logger.info(f"idp_hint [{idp_hint}] not found for {actor_type}, using first IDP [{selected_idp.logical_identifier}].")
         else:
-            logger.info(f"No idp_hint provided for {actor_type}, using first IDP [{selected_idp.id}].")
+            logger.info(f"No idp_hint provided for {actor_type}, using first IDP [{selected_idp.logical_identifier}].")
 
     # Return selected IDP or None (indicating default KT2 IDP should be used)
     if not selected_idp:

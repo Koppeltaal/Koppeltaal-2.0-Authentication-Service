@@ -217,8 +217,11 @@ class IdentityProvider(db.Model):
     openid_config_endpoint character varying(255) COLLATE pg_catalog."default",
     name character varying(255) COLLATE pg_catalog."default",
     username_attribute character varying(255) COLLATE pg_catalog."default",
+    logical_identifier character varying(255) COLLATE pg_catalog."default",
     CONSTRAINT identity_provider_pkey PRIMARY KEY (id)
     )
+
+    CREATE UNIQUE INDEX idx_identity_provider_logical_identifier ON identity_provider (logical_identifier);
     """
     id = db.Column(GUID(), primary_key=True, default=uuid4, unique=True)
     created_by = db.Column(db.String(255))
@@ -228,6 +231,7 @@ class IdentityProvider(db.Model):
     openid_config_endpoint = db.Column(db.String(255))
     name = db.Column(db.String(255))
     username_attribute = db.Column(db.String(255))
+    logical_identifier = db.Column(db.String(255), unique=True)
 
 
 class AllowedRedirect(db.Model):

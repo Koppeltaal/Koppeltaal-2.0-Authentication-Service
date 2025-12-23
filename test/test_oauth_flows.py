@@ -174,7 +174,8 @@ def identity_provider():
                                          client_id='client-id',
                                          client_secret='top-secret',
                                          username_attribute='sub',
-                                         openid_config_endpoint='http://unit.test/.well-known/openid-configuration')
+                                         openid_config_endpoint='http://unit.test/.well-known/openid-configuration',
+                                         logical_identifier=f'test-custom-idp-{uuid4()}')
     db.session.add(identity_provider)
     db.session.commit()
     yield identity_provider
@@ -348,7 +349,7 @@ def test_authorization_code_with_custom_idp(mock_get, mock_post, testing_app: Fl
             'redirect_uri': allowed_redirect.url,
             'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
             'client_id': smart_service_custom_idp.client_id,
-            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_custom_idp.fhir_store_device_id}', idp_hint=str(identity_provider.id)),
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id, f'Device/{smart_service_custom_idp.fhir_store_device_id}', idp_hint=identity_provider.logical_identifier),
             'state': module_state}
 
     ## AUTHORIZE

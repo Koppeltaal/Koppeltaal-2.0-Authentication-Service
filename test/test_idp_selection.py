@@ -43,12 +43,14 @@ class TestIdpSelection:
         # Patient IDPs (ordered by idp_order)
         idp1 = Mock()
         idp1.id = str(uuid4())
+        idp1.logical_identifier = 'patient-idp-1'
         idp1.name = 'Patient IDP 1'
         idp1.client_id = 'patient-idp-1-client'
         idp1.openid_config_endpoint = 'http://patient-idp-1/.well-known/openid-configuration'
 
         idp2 = Mock()
         idp2.id = str(uuid4())
+        idp2.logical_identifier = 'patient-idp-2'
         idp2.name = 'Patient IDP 2'
         idp2.client_id = 'patient-idp-2-client'
         idp2.openid_config_endpoint = 'http://patient-idp-2/.well-known/openid-configuration'
@@ -67,6 +69,7 @@ class TestIdpSelection:
         # Patient IDPs
         patient_idp = Mock()
         patient_idp.id = str(uuid4())
+        patient_idp.logical_identifier = 'patient-idp-default'
         patient_idp.name = 'Patient IDP Default'
         patient_idp.client_id = 'patient-idp-client'
         patient_idp.openid_config_endpoint = 'http://patient-idp/.well-known/openid-configuration'
@@ -74,12 +77,14 @@ class TestIdpSelection:
         # Practitioner IDPs
         prac_idp1 = Mock()
         prac_idp1.id = str(uuid4())
+        prac_idp1.logical_identifier = 'practitioner-idp-1'
         prac_idp1.name = 'Practitioner IDP 1'
         prac_idp1.client_id = 'prac-idp-1-client'
         prac_idp1.openid_config_endpoint = 'http://prac-idp-1/.well-known/openid-configuration'
 
         prac_idp2 = Mock()
         prac_idp2.id = str(uuid4())
+        prac_idp2.logical_identifier = 'practitioner-idp-2'
         prac_idp2.name = 'Practitioner IDP 2'
         prac_idp2.client_id = 'prac-idp-2-client'
         prac_idp2.openid_config_endpoint = 'http://prac-idp-2/.well-known/openid-configuration'
@@ -87,6 +92,7 @@ class TestIdpSelection:
         # RelatedPerson IDPs
         related_idp = Mock()
         related_idp.id = str(uuid4())
+        related_idp.logical_identifier = 'related-person-idp-default'
         related_idp.name = 'RelatedPerson IDP Default'
         related_idp.client_id = 'related-idp-client'
         related_idp.openid_config_endpoint = 'http://related-idp/.well-known/openid-configuration'
@@ -130,15 +136,15 @@ class TestIdpSelection:
     # Test 2.c.i: Valid idp_hint matching configured IDP -> use that IDP
     def test_valid_idp_hint_matching_configured_idp(self, smart_service_with_patient_idps):
         """When valid idp_hint matches configured IDP, should return that IDP"""
-        # Use second IDP's ID as hint
+        # Use second IDP's logical_identifier as hint
         second_idp = smart_service_with_patient_idps.patient_idps[1]
-        launch_token = self.create_launch_token('Patient/789', idp_hint=str(second_idp.id))
+        launch_token = self.create_launch_token('Patient/789', idp_hint=second_idp.logical_identifier)
         selected_idp = select_identity_provider(smart_service_with_patient_idps, launch_token)
 
         # Should return second IDP (matching the hint)
         assert selected_idp is not None
         assert selected_idp.name == 'Patient IDP 2'
-        assert selected_idp.id == second_idp.id
+        assert selected_idp.logical_identifier == second_idp.logical_identifier
 
     # Test 2.c.ii.1: Invalid idp_hint, no custom IDP -> use default KT2 IDP
     def test_invalid_idp_hint_no_custom_idp(self, smart_service_no_custom_idps):
@@ -173,13 +179,13 @@ class TestIdpSelection:
     def test_relatedperson_valid_idp_hint(self, smart_service_with_all_idps):
         """RelatedPerson: valid idp_hint matching configured IDP"""
         related_idp = smart_service_with_all_idps.related_person_idps[0]
-        launch_token = self.create_launch_token('RelatedPerson/444', idp_hint=str(related_idp.id))
+        launch_token = self.create_launch_token('RelatedPerson/444', idp_hint=related_idp.logical_identifier)
         selected_idp = select_identity_provider(smart_service_with_all_idps, launch_token)
 
         # Should return the hinted RelatedPerson IDP
         assert selected_idp is not None
         assert selected_idp.name == 'RelatedPerson IDP Default'
-        assert selected_idp.id == related_idp.id
+        assert selected_idp.logical_identifier == related_idp.logical_identifier
 
     # Test IDP ordering is preserved
     def test_idp_ordering_preserved(self, smart_service_with_patient_idps):
