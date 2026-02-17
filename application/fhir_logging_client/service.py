@@ -105,11 +105,11 @@ class FhirLoggingService:
                     "reference": f"Device/{current_app.config['SMART_BACKEND_SERVICE_DEVICE_ID']}",
                     "type": "Device"
                 },
-                "type" : {
+                "type" : [{
                   "system": "http://terminology.hl7.org/CodeSystem/security-source-type",
                   "code": "6",
                   "display": "Security Server"
-                }
+                }]
             },
             "entity":  [
                 {
