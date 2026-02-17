@@ -87,7 +87,8 @@ class FhirLoggingService:
                         "coding":  [
                             {
                                 "system": "http://dicom.nema.org/resources/ontology/DCM",
-                                "code": "110153"
+                                "code": "110153",
+                                "display": "Source Role ID"
                             }
                         ]
                     },
@@ -103,6 +104,11 @@ class FhirLoggingService:
                 "observer": {
                     "reference": f"Device/{current_app.config['SMART_BACKEND_SERVICE_DEVICE_ID']}",
                     "type": "Device"
+                },
+                "type" : {
+                  "system": "http://terminology.hl7.org/CodeSystem/security-source-type",
+                  "code": "6",
+                  "display": "Security Server"
                 }
             },
             "entity":  [
