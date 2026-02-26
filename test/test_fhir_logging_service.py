@@ -65,7 +65,7 @@ def testing_app(server_key: Key):
 def test_happy(mock1, testing_app: FlaskClient):
 
     testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", {})
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", {})
 
     json_content = resp.json()['json']
     resp_audit_event = AuditEvent(**json_content)
@@ -87,7 +87,7 @@ def test_happy_headers(mock1, testing_app: FlaskClient):
         'X-Correlation-Id': str(uuid4()),
         'X-Trace-Id': str(uuid4())
     }
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", trace_headers)
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", trace_headers)
 
     json_content = resp.json()['json']
     resp_audit_event = AuditEvent(**json_content)
@@ -112,7 +112,7 @@ def test_happy_related_person(mock1, testing_app: FlaskClient):
     """Test logging with a RelatedPerson entity"""
     
     testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("RelatedPerson/123", "456", {})
+    resp = fhir_logging_service.register_idp_interaction("RelatedPerson/123", "456", "MyIdP", {})
     
     json_content = resp.json()['json']
     resp_audit_event = AuditEvent(**json_content)
@@ -128,8 +128,75 @@ def test_happy_related_person(mock1, testing_app: FlaskClient):
 
 
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_idp_agent_present(mock1, testing_app: FlaskClient):
+    """Test that the identity provider agent is added to the audit event"""
+
+    testing_app.get("test")
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", {})
+
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
+
+    assert len(resp_audit_event.agent) == 2
+    idp_agent = resp_audit_event.agent[1]
+    assert idp_agent.who.display == "MyIdP"
+    assert idp_agent.requestor is False
+    assert idp_agent.type.coding[0].system == "http://dicom.nema.org/resources/ontology/DCM"
+    assert idp_agent.type.coding[0].code == "110152"
+    assert idp_agent.type.coding[0].display == "Destination Role ID"
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_idp_agent_without_identity_provider(mock1, testing_app: FlaskClient):
+    """Test that no identity provider agent is added when identity_provider_name is None"""
+
+    testing_app.get("test")
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", None, {})
+
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
+
+    assert len(resp_audit_event.agent) == 1
+    assert resp_audit_event.agent[0].who.reference == "Device/456"
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_idp_agent_empty_identity_provider(mock1, testing_app: FlaskClient):
+    """Test that no identity provider agent is added when identity_provider_name is empty string"""
+
+    testing_app.get("test")
+    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "", {})
+
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
+
+    assert len(resp_audit_event.agent) == 1
+    assert resp_audit_event.agent[0].who.reference == "Device/456"
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_idp_agent_with_practitioner(mock1, testing_app: FlaskClient):
+    """Test that the identity provider agent is added alongside a Practitioner entity"""
+
+    testing_app.get("test")
+    resp = fhir_logging_service.register_idp_interaction("Practitioner/789", "456", "HospitalIdP", {})
+
+    json_content = resp.json()['json']
+    resp_audit_event = AuditEvent(**json_content)
+
+    assert resp_audit_event.entity[0].what.reference == "Practitioner/789"
+    assert len(resp_audit_event.agent) == 2
+    # First agent is the requesting device
+    assert resp_audit_event.agent[0].who.reference == "Device/456"
+    assert resp_audit_event.agent[0].requestor is True
+    # Second agent is the identity provider
+    assert resp_audit_event.agent[1].who.display == "HospitalIdP"
+    assert resp_audit_event.agent[1].requestor is False
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
 def test_invalid_entity_type(mock1, testing_app: FlaskClient):
     """Test logging with an invalid entity type, should raise an Exception"""
-    
+
     with pytest.raises(Exception, match=r"Cannot log IDP interaction - Entity type must be Patient, Practitioner or RelatedPerson. Got \[InvalidType\] instead."):
-        fhir_logging_service.register_idp_interaction("InvalidType/123", "456", {})
+        fhir_logging_service.register_idp_interaction("InvalidType/123", "456", "MyIdP", {})
