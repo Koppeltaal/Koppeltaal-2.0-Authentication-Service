@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from fhir.resources.auditevent import AuditEvent
@@ -83,7 +83,7 @@ class FhirLoggingService:
             }],
             "action": "E",
             "outcome": "0",
-            "recorded": datetime.utcnow().isoformat("T", "milliseconds") + "+00:00",
+            "recorded": datetime.now(timezone.utc).isoformat("T", "milliseconds"),
             "agent":  [
                 {
                     "type": {
