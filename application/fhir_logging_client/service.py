@@ -15,13 +15,17 @@ logger.setLevel(logging.DEBUG)
 class FhirLoggingService:
 
     @staticmethod
-    def register_idp_interaction(entity_what_reference: str, requesting_client_id: str, identity_provider_name: str,
+    def register_idp_interaction(entity_what_reference: str,
+                                 requesting_client_id: str,
+                                 idp_name: str,
+                                 idp_issuer: str,
                                  trace_headers: dict):
 
         logger.info(f"Registering idp interaction for entity: [{entity_what_reference}]")
 
         audit_event = FhirLoggingService._get_audit_event(entity_what_reference, requesting_client_id,
-                                                          identity_provider_name, trace_headers)
+                                                          idp_name, idp_issuer,
+                                                          trace_headers)
         access_token = token_service.get_system_access_token()
 
         endpoint = f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/AuditEvent'
@@ -40,7 +44,10 @@ class FhirLoggingService:
         return response
 
     @staticmethod
-    def _get_audit_event(entity_what_reference: str, requesting_client_id: str, identity_provider_name: str,
+    def _get_audit_event(entity_what_reference: str,
+                         requesting_client_id: str,
+                         idp_name: str,
+                         idp_issuer: str,
                          trace_headers: dict):
 
         entity_type = entity_what_reference.split("/")[0]
@@ -129,7 +136,15 @@ class FhirLoggingService:
             ]
         }
 
-        if identity_provider_name:
+        if idp_name or idp_issuer:
+            agent_who ={}
+            if idp_name:
+                agent_who["display"] = idp_name
+            if idp_issuer:
+                agent_who["identifier"] = {
+                    "system": "http://koppeltaal.nl/oidc/issuer",
+                    "value": idp_issuer
+                }
             data["agent"].append({
                 "type": {
                     "coding": [
@@ -140,9 +155,7 @@ class FhirLoggingService:
                         }
                     ]
                 },
-                "who": {
-                    "display": identity_provider_name
-                },
+                "who": agent_who,
                 "requestor": False
             })
 

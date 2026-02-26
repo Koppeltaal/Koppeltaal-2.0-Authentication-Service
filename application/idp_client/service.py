@@ -24,7 +24,7 @@ the launch is performed by the actual user
 class IdpService:
     def consume_idp_code(self) -> Tuple[str, int]:
         user_claim = "email"
-        identity_provider_name = "default"
+        idp_name = "default"
 
         state = request.values.get('state')
         trace_headers = self._get_trace_headers()
@@ -66,14 +66,20 @@ class IdpService:
         if oauth2_session.identity_provider:
             identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
             user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
-            identity_provider_name = identity_provider.name
+            idp_name = identity_provider.name
 
         user_identifier = id_token[user_claim]
         if not user_identifier:
             logger.error(f'[{oauth2_session.id}] no [{user_claim}] claim found in id_token')
             return f'Bad request, no [{user_claim}] claim found in id_token', 400
 
-        logger.info(f'[{oauth2_session.id}] IdP id_token contains claim [{user_claim}] with value [{user_identifier}]')
+        # The `iss` claim is required by the OIDC spec (Section 2), but not enforced here
+        # to avoid blocking audit logging when an IdP omits it.
+        idp_issuer = id_token.get("iss")
+        if idp_issuer:
+            logger.info(f'[{oauth2_session.id}] IdP id_token contains claim [iss] with value [{idp_issuer}]')
+        else:
+            logger.warning(f'[{oauth2_session.id}] no [iss] claim found in id_token, continuing without issuer')
 
         # get the user from the FHIR server, to verify if the Patient has this email set as an identifier
         access_token = token_service.get_system_access_token()
@@ -102,7 +108,7 @@ class IdpService:
 
         logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
 
-        fhir_logging_service.register_idp_interaction(f'{sub}', oauth2_session.client_id, identity_provider_name, trace_headers)
+        fhir_logging_service.register_idp_interaction(f'{sub}', oauth2_session.client_id, idp_name, idp_issuer, trace_headers)
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302
