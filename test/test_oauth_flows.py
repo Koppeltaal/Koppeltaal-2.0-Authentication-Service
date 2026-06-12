@@ -671,3 +671,89 @@ def test_authorize_invalid_launch_token_logs_nothing(mock_get, mock_logging, tes
     assert authorize_resp.status_code == 400
     mock_logging.register_login.assert_not_called()
     mock_logging.register_idp_delegation.assert_not_called()
+
+
+def _test_authorization_code_mismatch_post(*args, **kwargs):
+    class MockResponse:
+        def __init__(self, json_data, status_code):
+            self.json_data = json_data
+            self.status_code = status_code
+            self.ok = True
+
+        def json(self):
+            return self.json_data
+
+    data = {'sub': 'wrong@example.com',
+            'email': 'wrong@example.com'}
+    id_token = jwt.encode(data, key=None, algorithm='none')
+    return MockResponse({'id_token': id_token}, 200)
+
+
+@mock.patch('application.idp_client.service.fhir_logging_service')
+@mock.patch('requests.post', side_effect=_test_authorization_code_happy_post)
+@mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
+def test_idp_decision_success_logged(mock_get, mock_post, mock_logging, testing_app: FlaskClient,
+                                     client_key: Key,
+                                     portal_key: Key,
+                                     client_id: str,
+                                     portal_id: str,
+                                     user_id: str,
+                                     patient_id: str,
+                                     resource_id: str,
+                                     smart_service_client: SmartService,
+                                     smart_service_portal: SmartService,
+                                     allowed_redirect: AllowedRedirect):
+    state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': allowed_redirect.url,
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id,
+                                 f'Device/{smart_service_client.fhir_store_device_id}'),
+            'state': state}
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+    idp_code = str(uuid4())
+    idp_state = _get_params_from_redirect(authorize_resp, 'state')
+    redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
+
+    assert redirect_resp.status_code == 302
+    mock_logging.register_idp_decision.assert_called_once()
+    call_args = mock_logging.register_idp_decision.call_args
+    assert call_args.args[0] == user_id
+    assert call_args.args[1] == client_id
+    assert call_args.args[4] == "0"
+
+
+@mock.patch('application.idp_client.service.fhir_logging_service')
+@mock.patch('requests.post', side_effect=_test_authorization_code_mismatch_post)
+@mock.patch('requests.get', side_effect=_test_authorization_code_happy_get)
+def test_idp_decision_failure_logged_on_user_mismatch(mock_get, mock_post, mock_logging,
+                                                      testing_app: FlaskClient,
+                                                      client_key: Key,
+                                                      portal_key: Key,
+                                                      client_id: str,
+                                                      portal_id: str,
+                                                      user_id: str,
+                                                      patient_id: str,
+                                                      resource_id: str,
+                                                      smart_service_client: SmartService,
+                                                      smart_service_portal: SmartService,
+                                                      allowed_redirect: AllowedRedirect):
+    state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': allowed_redirect.url,
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id,
+                                 f'Device/{smart_service_client.fhir_store_device_id}'),
+            'state': state}
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+    idp_code = str(uuid4())
+    idp_state = _get_params_from_redirect(authorize_resp, 'state')
+    redirect_resp = testing_app.get(f'/idp/oidc/code?code={idp_code}&state={idp_state}')
+
+    assert redirect_resp.status_code == 403
+    mock_logging.register_idp_decision.assert_called_once()
+    call_args = mock_logging.register_idp_decision.call_args
+    assert call_args.args[0] == user_id
+    assert call_args.args[4] == "4"
