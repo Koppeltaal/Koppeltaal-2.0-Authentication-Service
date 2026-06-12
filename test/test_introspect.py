@@ -1,3 +1,4 @@
+from unittest import mock
 from uuid import uuid4
 
 import pytest
@@ -239,3 +240,97 @@ def test_introspect_server_fail_exp(testing_app: FlaskClient, server_key: Key, s
     rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
     assert 'active' in rv.json
     assert not rv.json['active']
+
+
+@mock.patch('application.oauth_server.views.fhir_logging_service')
+def test_introspect_hti_launch_token_logs_audit_event(mock_logging,
+                                                      testing_app: FlaskClient,
+                                                      foreign_key: Key,
+                                                      smart_service_foreign: SmartService,
+                                                      smart_service_client: SmartService,
+                                                      client_assertion):
+    header = {
+        "alg": "RS512",
+        "typ": "JWT"
+    }
+    payload = {
+        "sub": "Patient/123",
+        "iat": get_now(),
+        "exp": get_now(300),
+        "iss": smart_service_foreign.client_id,
+        "jti": str(uuid4()),
+        "aud": f'Device/{smart_service_client.fhir_store_device_id}'
+    }
+    json_token = JsonWebToken(algorithms=['RS512'])
+    token = json_token.encode(header, payload, foreign_key)
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+
+    assert rv.json['active']
+    mock_logging.register_token_introspection.assert_called_once()
+    call_args = mock_logging.register_token_introspection.call_args
+    assert call_args.args[0] == "Patient/123"
+    assert call_args.args[1] == smart_service_client.client_id
+    assert call_args.args[2]['X-Trace-Id'] == payload['jti']
+
+
+@mock.patch('application.oauth_server.views.fhir_logging_service')
+def test_introspect_access_token_logs_no_audit_event(mock_logging,
+                                                     testing_app: FlaskClient,
+                                                     server_key: Key,
+                                                     smart_service_client: SmartService,
+                                                     client_assertion):
+    header = {
+        "alg": "RS512",
+        "typ": "JWT"
+    }
+    payload = {
+        "sub": "Patient/123",
+        "iat": get_now(),
+        "exp": get_now(300),
+        "iss": 'http://localhost/',
+        "jti": str(uuid4()),
+        "aud": 'fhir-service'
+    }
+    json_token = JsonWebToken(algorithms=['RS512'])
+    token = json_token.encode(header, payload, get_private_key_as_pem(server_key))
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+
+    assert rv.json['active']
+    mock_logging.register_token_introspection.assert_not_called()
+
+
+@mock.patch('application.oauth_server.views.fhir_logging_service')
+def test_introspect_invalid_token_logs_no_audit_event(mock_logging,
+                                                      testing_app: FlaskClient,
+                                                      foreign_key: Key,
+                                                      smart_service_foreign: SmartService,
+                                                      smart_service_client: SmartService,
+                                                      client_assertion):
+    header = {
+        "alg": "RS512",
+        "typ": "JWT"
+    }
+    payload = {
+        "sub": "Patient/123",
+        "iat": get_now(),
+        "exp": get_now(-1000),
+        "iss": smart_service_foreign.client_id,
+        "jti": str(uuid4()),
+        "aud": f'Device/{smart_service_client.fhir_store_device_id}'
+    }
+    json_token = JsonWebToken(algorithms=['RS512'])
+    token = json_token.encode(header, payload, foreign_key)
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion,
+            'token': token}
+    rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
+
+    assert not rv.json['active']
+    mock_logging.register_token_introspection.assert_not_called()
+

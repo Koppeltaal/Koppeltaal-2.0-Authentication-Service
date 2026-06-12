@@ -1,7 +1,6 @@
 import logging
 from typing import Tuple
 from urllib.parse import urlencode
-from uuid import uuid4
 
 import jwt as pyjwt
 import requests
@@ -10,24 +9,25 @@ from flask import request, current_app
 from application.fhir_logging_client.service import fhir_logging_service
 from application.oauth_server.model import Oauth2Session, IdentityProvider
 from application.oauth_server.service import token_service
-from application.utils import new_trace_headers
+from application.utils import get_trace_headers, new_trace_headers
 
 logger = logging.getLogger('idp_service')
 logger.setLevel(logging.DEBUG)
 
 '''
-The IdP service is used for communication with the configured IdP. During the /authorize call in the `oauth_server` 
-module, this service will be called to verify that the subject of the JWT (during a launch) actually matches the 
+The IdP service is used for communication with the configured IdP. During the /authorize call in the `oauth_server`
+module, this service will be called to verify that the subject of the JWT (during a launch) actually matches the
 currently logged in user. The service executed an OIDC auth code flow to retrieve the `id_token` and ensures
-the launch is performed by the actual user 
+the launch is performed by the actual user
 '''
 class IdpService:
     def consume_idp_code(self) -> Tuple[str, int]:
         user_claim = "email"
         idp_name = "default"
+        idp_issuer = None
 
         state = request.values.get('state')
-        trace_headers = self._get_trace_headers()
+        trace_headers = get_trace_headers(request.headers)
 
         if not state:
             logger.error('No state found on the authentication response')
@@ -45,9 +45,23 @@ class IdpService:
         if 'X-Trace-Id' not in trace_headers:
             trace_headers['X-Trace-Id'] = hti_launch_token['jti']  # The JTI token is the trace id if not set
 
+        # Resolve the IdP before any failure can occur, so failure AuditEvents
+        # attribute the correct IdP instead of the default one.
+        if oauth2_session.identity_provider:
+            identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
+            user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
+            idp_name = identity_provider.name
+
+        def log_decision_failure():
+            # IG memo topic 11 section 3.6: the IdP decision is recorded with the outcome,
+            # also when authentication is rejected (outcome 4).
+            fhir_logging_service.register_idp_decision(sub, oauth2_session.client_id,
+                                                       idp_name, idp_issuer, "4", trace_headers)
+
         code = request.values.get('code')
         if not code:
             logger.error(f'[{oauth2_session.id}] no code parameter found')
+            log_decision_failure()
             return 'Bad request, no code found on the authentication response', 400
 
         # exchange the IDP code, we need the id_token from the response to verify the authenticated user matches the
@@ -56,21 +70,23 @@ class IdpService:
         # verified at the IDP
         oidc_token = self.exchange_idp_code(code, oauth2_session)
         logger.info(f"Received oidc token: {oidc_token}")
-        encoded_id_token = oidc_token['id_token']
+        encoded_id_token = oidc_token.get('id_token')
         if not encoded_id_token:
             logger.error(f'[{oauth2_session.id}] no id_token found')
+            log_decision_failure()
             return 'Bad request, no id_token found', 400
 
-        id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
+        try:
+            id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
+        except pyjwt.exceptions.DecodeError:
+            logger.error(f'[{oauth2_session.id}] id_token could not be decoded as a JWT')
+            log_decision_failure()
+            return 'Bad request, invalid id_token', 400
 
-        if oauth2_session.identity_provider:
-            identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
-            user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
-            idp_name = identity_provider.name
-
-        user_identifier = id_token[user_claim]
+        user_identifier = id_token.get(user_claim)
         if not user_identifier:
             logger.error(f'[{oauth2_session.id}] no [{user_claim}] claim found in id_token')
+            log_decision_failure()
             return f'Bad request, no [{user_claim}] claim found in id_token', 400
 
         # The `iss` claim is required by the OIDC spec (Section 2), but not enforced here
@@ -89,6 +105,7 @@ class IdpService:
         launching_user_response = requests.get(f'{current_app.config["FHIR_CLIENT_SERVERURL"]}/{sub}', headers=headers)
         if not launching_user_response.ok:
             logger.error(f'Failed to fetch user {sub} with error code [{launching_user_response.status_code}] and message: \n{launching_user_response.reason}')
+            log_decision_failure()
             return 'Bad request, user could not be fetched from store', 400
 
         launching_user_resource = launching_user_response.json()
@@ -98,17 +115,20 @@ class IdpService:
             headers = new_trace_headers(headers, {"Authorization": "Bearer " + access_token})
             error = self.handle_relatedperson_checks(launching_user_resource, hti_launch_token, headers, access_token)
             if error:
+                log_decision_failure()
                 return error
 
         identifiers = launching_user_resource['identifier']
         values = [identifier['value'] for identifier in identifiers if 'value' in identifier]
         if user_identifier not in values:
             logger.error(f'[{oauth2_session.id}] user id mismatch, expected [{user_identifier}] but found {str(values)}')
+            log_decision_failure()
             return f'Forbidden, patient identifier [{user_identifier}] not found on [{sub}]', 403
 
         logger.info(f'[{oauth2_session.id}] user id matched between HTI and IDP by user_identifier [{user_identifier}]')
 
-        fhir_logging_service.register_idp_interaction(f'{sub}', oauth2_session.client_id, idp_name, idp_issuer, trace_headers)
+        fhir_logging_service.register_idp_decision(sub, oauth2_session.client_id,
+                                                   idp_name, idp_issuer, "0", trace_headers)
 
         # As the user has been verified, finish the initial OAuth launch flow by responding with the code
         return f'{oauth2_session.redirect_uri}?{urlencode({"code": oauth2_session.code, "state": oauth2_session.state})}', 302
@@ -117,18 +137,6 @@ class IdpService:
         if related_person['patient']['reference'] != hti_launch_token['patient']:
             logger.error(f'[RelatedPerson/{related_person["id"]}] launched, but got a patient mismatch: RelatedPerson.patient == {related_person["patient"]} and launch.patient == {hti_launch_token["patient"]}')
             return f'Forbidden', 403
-
-
-    def _get_trace_headers(self):
-        trace_headers = {
-            'X-Request-Id': request.headers.get('X-Request-Id', str(uuid4()))
-        }
-        if 'X-Correlation-Id' in request.headers:
-            trace_headers['X-Correlation-Id'] = request.headers['X-Correlation-Id']
-        if 'X-Trace-Id' in request.headers:
-            trace_headers['X-Trace-Id'] = request.headers['X-Trace-Id']
-
-        return trace_headers
 
     @staticmethod
     def exchange_idp_code(code, oauth2_session: Oauth2Session):

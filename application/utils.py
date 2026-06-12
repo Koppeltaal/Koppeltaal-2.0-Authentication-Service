@@ -30,6 +30,19 @@ def new_trace_headers(trace_headers: dict, headers: dict = None):
         rv["X-Trace-Id"] = trace_headers['X-Trace-Id']
     return rv
 
+
+def get_trace_headers(headers, default_trace_id: str = None) -> dict:
+    """Extract trace headers from incoming request headers; generates X-Request-Id when absent."""
+    trace_headers = {'X-Request-Id': headers.get('X-Request-Id', str(uuid4()))}
+    if 'X-Correlation-Id' in headers:
+        trace_headers['X-Correlation-Id'] = headers['X-Correlation-Id']
+    if 'X-Trace-Id' in headers:
+        trace_headers['X-Trace-Id'] = headers['X-Trace-Id']
+    elif default_trace_id:
+        trace_headers['X-Trace-Id'] = default_trace_id
+    return trace_headers
+
+
 def oidc_smart_config_cached():
     """ Flask decorator that allow to set Expire and Cache headers. """
 
