@@ -125,6 +125,9 @@ def create_blueprint() -> Blueprint:
         assert current_app.config['FHIR_CLIENT_SERVERURL'] == oauth2_session.aud, "Invalid audience"
         launch_token = hti_token_verifier.verify_and_get_token(oauth2_session.launch, oauth2_session.client_id)
         if launch_token:
+            trace_headers = get_trace_headers(request.headers, default_trace_id=launch_token.get('jti'))
+            fhir_logging_service.register_login(launch_token.get('sub'), oauth2_session.client_id,
+                                                trace_headers)
             # If the JWT is valid, we have to verify that the launch token was not compromised by executing another
             # OIDC flow against the shared IDP. The user should already be logged in here, or a login will be
             # prompted. The username has to be present as a Patient.identifier
@@ -158,9 +161,14 @@ def create_blueprint() -> Blueprint:
 
                     parameters['client_id'] = selected_idp.client_id
                     data = requests.get(selected_idp.openid_config_endpoint).json()
+                    fhir_logging_service.register_idp_delegation(launch_token['sub'], oauth2_session.client_id,
+                                                                 selected_idp.name, data.get('issuer'),
+                                                                 trace_headers)
                     return redirect(f'{data["authorization_endpoint"]}?{urlencode(parameters)}')
 
                 # No custom IDPs configured - use default Koppeltaal IDP
+                fhir_logging_service.register_idp_delegation(launch_token['sub'], oauth2_session.client_id,
+                                                             'default', None, trace_headers)
                 return redirect(f'{current_app.config["IDP_AUTHORIZE_ENDPOINT"]}?{urlencode(parameters)}')
             else:
                 return redirect(

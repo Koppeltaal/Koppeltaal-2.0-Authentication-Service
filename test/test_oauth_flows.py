@@ -593,3 +593,81 @@ def test_authorize_wrong_scope(mock1, mock2, testing_app: FlaskClient, foreign_k
 
     rv = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
     assert rv.status_code == 400
+
+
+def _test_openid_config_with_issuer(*args, **kwargs):
+    class MockResponse:
+        def __init__(self, json_data, status_code):
+            self.json_data = json_data
+            self.status_code = status_code
+            self.ok = True
+
+        def json(self):
+            return self.json_data
+
+    data = {'authorization_endpoint': 'https://unit.test/idp',
+            'issuer': 'https://unit.test/issuer'}
+    return MockResponse(data, 200)
+
+
+@mock.patch('application.oauth_server.views.fhir_logging_service')
+@mock.patch('requests.get', side_effect=_test_openid_config_with_issuer)
+def test_authorize_logs_login_and_delegation(mock_get, mock_logging, testing_app: FlaskClient,
+                                             client_key: Key,
+                                             portal_key: Key,
+                                             client_id: str,
+                                             portal_id: str,
+                                             user_id: str,
+                                             patient_id: str,
+                                             resource_id: str,
+                                             identity_provider: IdentityProvider,
+                                             smart_service_client: SmartService,
+                                             smart_service_portal: SmartService,
+                                             allowed_redirect: AllowedRedirect):
+    state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': allowed_redirect.url,
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': client_id,
+            'launch': _hti_token(testing_app, portal_key, portal_id, user_id, patient_id, resource_id,
+                                 f'Device/{smart_service_client.fhir_store_device_id}'),
+            'state': state}
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+
+    assert authorize_resp.status_code == 302
+
+    mock_logging.register_login.assert_called_once()
+    login_args = mock_logging.register_login.call_args
+    assert login_args.args[0] == user_id
+    assert login_args.args[1] == client_id
+    assert 'X-Trace-Id' in login_args.args[2]
+
+    mock_logging.register_idp_delegation.assert_called_once()
+    delegation_args = mock_logging.register_idp_delegation.call_args
+    assert delegation_args.args[0] == user_id
+    assert delegation_args.args[1] == client_id
+    # idp_name comes from IdentityProvider.name (not set in the fixture)
+    assert delegation_args.args[3] == 'https://unit.test/issuer'
+    # both events share the same trace headers
+    assert delegation_args.args[4] == login_args.args[2]
+
+
+@mock.patch('application.oauth_server.views.fhir_logging_service')
+@mock.patch('requests.get', side_effect=_test_openid_config_with_issuer)
+def test_authorize_invalid_launch_token_logs_nothing(mock_get, mock_logging, testing_app: FlaskClient,
+                                                     client_id: str,
+                                                     identity_provider: IdentityProvider,
+                                                     smart_service_client: SmartService,
+                                                     allowed_redirect: AllowedRedirect):
+    state = str(uuid4())
+    data = {'scope': 'launch fhirUser openid',
+            'redirect_uri': allowed_redirect.url,
+            'aud': testing_app.application.config.get('FHIR_CLIENT_SERVERURL'),
+            'client_id': client_id,
+            'launch': 'not-a-jwt',
+            'state': state}
+    authorize_resp = testing_app.get(f'/oauth2/authorize?{urlencode(data)}')
+
+    assert authorize_resp.status_code == 400
+    mock_logging.register_login.assert_not_called()
+    mock_logging.register_idp_delegation.assert_not_called()
