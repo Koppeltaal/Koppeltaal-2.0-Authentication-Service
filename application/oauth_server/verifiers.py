@@ -4,7 +4,7 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 import jwt as pyjwt
 from flask import current_app, request
@@ -19,7 +19,14 @@ logger = logging.getLogger('verifiers')
 consumed_jti_tokens = []
 
 
-def verify_token(encoded_token: str, auth_client_id: str) -> Optional[Dict[str, Any]]:
+def verify_token(encoded_token: str, auth_client_id: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """
+    Dispatches the token to the matching verifier and returns (token_type, claims).
+
+    token_type is one of 'access_token', 'client_credentials', 'hti_launch', or None
+    when no verifier condition matched. claims is None when verification failed.
+    This dispatch is the single source of truth for recognizing an HTI launch token.
+    """
     unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
     iss = unverified_decoded_jwt.get('iss', '')
     aud = unverified_decoded_jwt.get('aud', '')
@@ -28,16 +35,16 @@ def verify_token(encoded_token: str, auth_client_id: str) -> Optional[Dict[str, 
     is_client_id = _exists_smart_service(iss)
     if iss == request.url_root and aud == 'fhir-service':
         logger.info("verify_token matched to access_token_verifier")
-        return access_token_verifier.verify_and_get_token(encoded_token)
+        return 'access_token', access_token_verifier.verify_and_get_token(encoded_token)
     elif is_client_id and aud == token_endpoint:
         logger.info("verify_token matched to client_credentials_verifier")
-        return client_credentials_verifier.verify_and_get_token(encoded_token, auth_client_id)
+        return 'client_credentials', client_credentials_verifier.verify_and_get_token(encoded_token, auth_client_id)
     elif is_client_id and aud.startswith('Device/'):
         logger.info("verify_token matched to hti_token_verifier")
-        return hti_token_verifier.verify_and_get_token(encoded_token, auth_client_id)
+        return 'hti_launch', hti_token_verifier.verify_and_get_token(encoded_token, auth_client_id)
 
     logger.warning(f"Cannot verify token for issuer [{iss}] and aud [{aud}] - it did not match any condition matched to a verifier")
-    return
+    return None, None
 
 
 class ClientCredentialsTokenVerifier:

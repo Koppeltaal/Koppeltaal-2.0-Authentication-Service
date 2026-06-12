@@ -18,8 +18,10 @@ from application.database import db
 from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService, IdentityProvider, AllowedRedirect
 from application.oauth_server.scopes import scope_service
 from application.oauth_server.service import token_service, token_authorization_code_service, LAUNCH_SCOPE_DEFAULT
+from application.fhir_logging_client.service import fhir_logging_service
 from application.oauth_server.verifiers import hti_token_verifier, client_credentials_verifier, verify_token, \
     get_smart_service
+from application.utils import get_trace_headers
 
 logger = logging.getLogger('oauth_views')
 logger.setLevel(logging.DEBUG)
@@ -225,12 +227,18 @@ def create_blueprint() -> Blueprint:
                 return jsonify({'active': False})
 
             auth_client_id = auth_token['iss']  # Issuer of the auth token is the client_id of the calling application.
-            decoded = verify_token(token, auth_client_id)
+            token_type, decoded = verify_token(token, auth_client_id)
 
             if decoded:
                 # TODO: validate fields
                 rv = decoded.copy()
                 rv['active'] = True
+                if token_type == 'hti_launch':
+                    # IG memo topic 11 section 3.7: introspection of an HTI launch token is
+                    # recorded as a User Authentication AuditEvent; other token types are not.
+                    trace_headers = get_trace_headers(request.headers, default_trace_id=decoded.get('jti'))
+                    fhir_logging_service.register_token_introspection(decoded.get('sub'), auth_client_id,
+                                                                      trace_headers)
                 return jsonify(rv)
             return jsonify({'active': False})
         logger.info("Invalid introspect request - returning access denied")
