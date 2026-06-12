@@ -63,199 +63,6 @@ def testing_app(server_key: Key):
 
 
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_happy(mock1, testing_app: FlaskClient):
-
-    testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", "https://example.com/idp", {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert resp_audit_event.entity[0].what.reference == "Patient/123"
-    assert resp_audit_event.agent[0].who.reference == "Device/456"
-    assert resp_audit_event.source.observer.reference == "Device/my-unit-test-auth-server-device-id"
-    assert resp_audit_event.outcome == "0"
-    assert 'Authorization' in resp.json()['headers']
-    assert 'X-Request-Id' in resp.json()['headers']
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_happy_headers(mock1, testing_app: FlaskClient):
-
-    testing_app.get("test")  # TODO: Ugly fix to initialize app context - mocking the flask.request would be nicer
-    trace_headers = {
-        'X-Request-Id': str(uuid4()),
-        'X-Correlation-Id': str(uuid4()),
-        'X-Trace-Id': str(uuid4())
-    }
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", "https://example.com/idp", trace_headers)
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert resp_audit_event.entity[0].what.reference == "Patient/123"
-    assert resp_audit_event.agent[0].who.reference == "Device/456"
-    assert resp_audit_event.source.observer.reference == "Device/my-unit-test-auth-server-device-id"
-    assert resp_audit_event.extension[0].valueId == trace_headers['X-Request-Id']
-    assert resp_audit_event.extension[1].valueId == trace_headers['X-Correlation-Id']
-    assert resp_audit_event.extension[2].valueId == trace_headers['X-Trace-Id']
-    assert resp_audit_event.outcome == "0"
-    assert 'Authorization' in resp.json()['headers']
-    assert 'X-Request-Id' in resp.json()['headers']
-    # Correlation ID should be the original Request ID
-    assert trace_headers['X-Request-Id'] == resp.json()['headers']['X-Correlation-Id']
-    # Trace ID should remain the same
-    assert trace_headers['X-Trace-Id'] == resp.json()['headers']['X-Trace-Id']
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_happy_related_person(mock1, testing_app: FlaskClient):
-    """Test logging with a RelatedPerson entity"""
-    
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("RelatedPerson/123", "456", "MyIdP", "https://example.com/idp", {})
-    
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-    
-    assert resp_audit_event.entity[0].what.reference == "RelatedPerson/123"
-    assert resp_audit_event.entity[0].role.code == "6"  # Ensure role code is '6' for RelatedPerson
-    assert resp_audit_event.entity[0].role.display == "User"  # Ensure role display is 'User'
-    assert resp_audit_event.agent[0].who.reference == "Device/456"
-    assert resp_audit_event.source.observer.reference == "Device/my-unit-test-auth-server-device-id"
-    assert resp_audit_event.outcome == "0"
-    assert 'Authorization' in resp.json()['headers']
-    assert 'X-Request-Id' in resp.json()['headers']
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_present(mock1, testing_app: FlaskClient):
-    """Test that the identity provider agent is added to the audit event"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", "https://example.com/idp", {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert len(resp_audit_event.agent) == 2
-    idp_agent = resp_audit_event.agent[1]
-    assert idp_agent.who.display == "MyIdP"
-    assert idp_agent.requestor is False
-    assert idp_agent.type.coding[0].system == "http://dicom.nema.org/resources/ontology/DCM"
-    assert idp_agent.type.coding[0].code == "110152"
-    assert idp_agent.type.coding[0].display == "Destination Role ID"
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_without_identity_provider(mock1, testing_app: FlaskClient):
-    """Test that no identity provider agent is added when both idp_name and idp_issuer are None"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", None, None, {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert len(resp_audit_event.agent) == 1
-    assert resp_audit_event.agent[0].who.reference == "Device/456"
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_empty_identity_provider(mock1, testing_app: FlaskClient):
-    """Test that no identity provider agent is added when both idp_name and idp_issuer are empty"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "", "", {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert len(resp_audit_event.agent) == 1
-    assert resp_audit_event.agent[0].who.reference == "Device/456"
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_with_practitioner(mock1, testing_app: FlaskClient):
-    """Test that the identity provider agent is added alongside a Practitioner entity"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Practitioner/789", "456", "HospitalIdP", "https://example.com/idp", {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert resp_audit_event.entity[0].what.reference == "Practitioner/789"
-    assert len(resp_audit_event.agent) == 2
-    # First agent is the requesting device
-    assert resp_audit_event.agent[0].who.reference == "Device/456"
-    assert resp_audit_event.agent[0].requestor is True
-    # Second agent is the identity provider
-    assert resp_audit_event.agent[1].who.display == "HospitalIdP"
-    assert resp_audit_event.agent[1].requestor is False
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_has_issuer_identifier(mock1, testing_app: FlaskClient):
-    """Test that the IdP agent who contains the issuer identifier"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", "https://example.com/idp", {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert len(resp_audit_event.agent) == 2
-    idp_agent = resp_audit_event.agent[1]
-    assert idp_agent.who.display == "MyIdP"
-    assert idp_agent.who.identifier.system == "http://koppeltaal.nl/oidc/issuer"
-    assert idp_agent.who.identifier.value == "https://example.com/idp"
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_issuer_only(mock1, testing_app: FlaskClient):
-    """Test that the IdP agent is added with only an issuer (no name)"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", None, "https://example.com/idp", {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert len(resp_audit_event.agent) == 2
-    idp_agent = resp_audit_event.agent[1]
-    assert idp_agent.who.display is None
-    assert idp_agent.who.identifier.system == "http://koppeltaal.nl/oidc/issuer"
-    assert idp_agent.who.identifier.value == "https://example.com/idp"
-    assert idp_agent.requestor is False
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_idp_agent_name_only(mock1, testing_app: FlaskClient):
-    """Test that the IdP agent is added with only a name (no issuer)"""
-
-    testing_app.get("test")
-    resp = fhir_logging_service.register_idp_interaction("Patient/123", "456", "MyIdP", None, {})
-
-    json_content = resp.json()['json']
-    resp_audit_event = AuditEvent(**json_content)
-
-    assert len(resp_audit_event.agent) == 2
-    idp_agent = resp_audit_event.agent[1]
-    assert idp_agent.who.display == "MyIdP"
-    assert idp_agent.who.identifier is None
-    assert idp_agent.requestor is False
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
-def test_invalid_entity_type(mock1, testing_app: FlaskClient):
-    """Test logging with an invalid entity type, should raise an Exception"""
-
-    with pytest.raises(Exception, match=r"Cannot log IDP interaction - Entity type must be Patient, Practitioner or RelatedPerson. Got \[InvalidType\] instead."):
-        fhir_logging_service.register_idp_interaction("InvalidType/123", "456", "MyIdP", "https://example.com/idp", {})
-
-
-@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
 def test_register_login_happy(mock1, testing_app: FlaskClient):
     testing_app.get("test")
     resp = fhir_logging_service.register_login("Patient/123", "456", {})
@@ -352,6 +159,22 @@ def test_register_idp_delegation_name_only(mock1, testing_app: FlaskClient):
 
 
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_register_idp_delegation_issuer_only(mock1, testing_app: FlaskClient):
+    testing_app.get("test")
+    resp = fhir_logging_service.register_idp_delegation(
+        "Patient/123", "456", None, "https://example.com/idp", {})
+
+    audit_event = AuditEvent(**resp.json()['json'])
+
+    assert len(audit_event.agent) == 2
+    idp_agent = audit_event.agent[1]
+    assert idp_agent.who.display is None
+    assert idp_agent.who.identifier.system == "http://koppeltaal.nl/oidc/issuer"
+    assert idp_agent.who.identifier.value == "https://example.com/idp"
+    assert idp_agent.requestor is False
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
 def test_register_idp_decision_success(mock1, testing_app: FlaskClient):
     testing_app.get("test")
     resp = fhir_logging_service.register_idp_decision(
@@ -414,3 +237,23 @@ def test_audit_post_failure_does_not_raise(mock1, testing_app: FlaskClient):
     result = fhir_logging_service.register_login("Patient/123", "456", {})
 
     assert result is None
+
+
+def _test_fhir_logging_error_post(*args, **kwargs):
+    class MockResponse:
+        def __init__(self):
+            self.status_code = 422
+            self.ok = False
+            self.reason = 'Unprocessable Entity'
+
+    return MockResponse()
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_error_post)
+def test_audit_post_error_response_is_returned(mock1, testing_app: FlaskClient):
+    testing_app.get("test")
+    resp = fhir_logging_service.register_login("Patient/123", "456", {})
+
+    assert resp is not None
+    assert resp.ok is False
+    assert resp.status_code == 422
