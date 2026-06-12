@@ -45,6 +45,13 @@ class IdpService:
         if 'X-Trace-Id' not in trace_headers:
             trace_headers['X-Trace-Id'] = hti_launch_token['jti']  # The JTI token is the trace id if not set
 
+        # Resolve the IdP before any failure can occur, so failure AuditEvents
+        # attribute the correct IdP instead of the default one.
+        if oauth2_session.identity_provider:
+            identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
+            user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
+            idp_name = identity_provider.name
+
         def log_decision_failure():
             # IG memo topic 11 section 3.6: the IdP decision is recorded with the outcome,
             # also when authentication is rejected (outcome 4).
@@ -63,18 +70,18 @@ class IdpService:
         # verified at the IDP
         oidc_token = self.exchange_idp_code(code, oauth2_session)
         logger.info(f"Received oidc token: {oidc_token}")
-        encoded_id_token = oidc_token['id_token']
+        encoded_id_token = oidc_token.get('id_token')
         if not encoded_id_token:
             logger.error(f'[{oauth2_session.id}] no id_token found')
             log_decision_failure()
             return 'Bad request, no id_token found', 400
 
-        id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
-
-        if oauth2_session.identity_provider:
-            identity_provider: IdentityProvider = IdentityProvider.query.filter_by(id=oauth2_session.identity_provider).first()
-            user_claim = identity_provider.username_attribute  # overwrite the default claim "email"
-            idp_name = identity_provider.name
+        try:
+            id_token = pyjwt.decode(encoded_id_token, options={"verify_signature": False})  # TODO: Verify signature
+        except pyjwt.exceptions.DecodeError:
+            logger.error(f'[{oauth2_session.id}] id_token could not be decoded as a JWT')
+            log_decision_failure()
+            return 'Bad request, invalid id_token', 400
 
         user_identifier = id_token.get(user_claim)
         if not user_identifier:
