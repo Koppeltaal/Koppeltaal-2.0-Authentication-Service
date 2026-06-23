@@ -242,8 +242,9 @@ def create_blueprint() -> Blueprint:
                 rv = decoded.copy()
                 rv['active'] = True
                 if token_type == 'hti_launch':
-                    # IG memo topic 11 section 3.7: introspection of an HTI launch token is
-                    # recorded as a User Authentication AuditEvent; other token types are not.
+                    # IG memo topic 11 section 3.6 (introspect variant): introspection of an
+                    # HTI launch token is recorded as a User Authentication AuditEvent; other
+                    # token types are not.
                     trace_headers = get_trace_headers(request.headers, default_trace_id=decoded.get('jti'))
                     fhir_logging_service.register_token_introspection(decoded.get('sub'), auth_client_id,
                                                                       trace_headers)

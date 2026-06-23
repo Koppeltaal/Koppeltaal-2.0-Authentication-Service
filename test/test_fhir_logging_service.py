@@ -80,6 +80,7 @@ def test_register_login_happy(mock1, testing_app: FlaskClient):
     assert audit_event.entity[0].what.reference == "Patient/123"
     assert audit_event.entity[0].role.code == "1"
     assert audit_event.outcome == "0"
+    assert audit_event.outcomeDesc == "authorize: Authorize succeeded"
     assert audit_event.source.observer.reference == "Device/my-unit-test-auth-server-device-id"
     assert 'Authorization' in resp.json()['headers']
 
@@ -132,8 +133,9 @@ def test_register_idp_delegation_happy(mock1, testing_app: FlaskClient):
 
     audit_event = AuditEvent(**resp.json()['json'])
 
-    assert audit_event.subtype[0].code == "110144"
-    assert audit_event.subtype[0].display == "Authentication Delegated to IdP"
+    assert audit_event.subtype[0].code == "110122"
+    assert audit_event.subtype[0].display == "Login"
+    assert audit_event.outcomeDesc == "idp call: Authentication delegated to IdP"
     assert len(audit_event.agent) == 2
     assert audit_event.agent[0].who.reference == "Device/456"
     idp_agent = audit_event.agent[1]
@@ -152,7 +154,7 @@ def test_register_idp_delegation_name_only(mock1, testing_app: FlaskClient):
 
     audit_event = AuditEvent(**resp.json()['json'])
 
-    assert audit_event.subtype[0].code == "110144"
+    assert audit_event.subtype[0].code == "110122"
     assert len(audit_event.agent) == 2
     assert audit_event.agent[1].who.display == "default"
     assert audit_event.agent[1].who.identifier is None
@@ -182,9 +184,10 @@ def test_register_idp_decision_success(mock1, testing_app: FlaskClient):
 
     audit_event = AuditEvent(**resp.json()['json'])
 
-    assert audit_event.subtype[0].code == "110145"
-    assert audit_event.subtype[0].display == "IdP Authentication Decision"
+    assert audit_event.subtype[0].code == "110122"
+    assert audit_event.subtype[0].display == "Login"
     assert audit_event.outcome == "0"
+    assert audit_event.outcomeDesc == "idp login: IdP login succeeded"
     assert audit_event.entity[0].what.reference == "Patient/123"
     assert len(audit_event.agent) == 2
     assert audit_event.agent[1].who.display == "MyIdP"
@@ -198,8 +201,9 @@ def test_register_idp_decision_failure_outcome(mock1, testing_app: FlaskClient):
 
     audit_event = AuditEvent(**resp.json()['json'])
 
-    assert audit_event.subtype[0].code == "110145"
+    assert audit_event.subtype[0].code == "110122"
     assert audit_event.outcome == "4"
+    assert audit_event.outcomeDesc == "idp login: IdP login failed"
 
 
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
@@ -209,16 +213,16 @@ def test_register_token_introspection_happy(mock1, testing_app: FlaskClient):
 
     audit_event = AuditEvent(**resp.json()['json'])
 
-    assert audit_event.subtype[0].code == "110143"
-    assert audit_event.subtype[0].display == "Token Introspection (HTI launch)"
-    assert len(audit_event.agent) == 2
-    # introspecting application
+    assert audit_event.subtype[0].code == "110122"
+    assert audit_event.subtype[0].display == "Login"
+    assert audit_event.outcomeDesc == "introspect: Introspect succeeded"
+    # the introspecting application is the sole agent
+    assert len(audit_event.agent) == 1
     assert audit_event.agent[0].who.reference == "Device/456"
     assert audit_event.agent[0].requestor is True
-    # the launch person on agent.who, per IG memo topic 11 section 3.7
-    assert audit_event.agent[1].who.reference == "Patient/123"
-    assert audit_event.agent[1].requestor is False
-    assert audit_event.entity is None
+    # the launch person is the entity (entity.what), per IG memo topic 11 section 3.6
+    assert audit_event.entity[0].what.reference == "Patient/123"
+    assert audit_event.entity[0].role.code == "1"
     assert audit_event.outcome == "0"
 
 

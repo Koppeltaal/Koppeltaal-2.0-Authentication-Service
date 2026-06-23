@@ -25,7 +25,7 @@ class FhirLoggingService:
     @staticmethod
     def register_login(entity_what_reference: str, requesting_client_id: str, trace_headers: dict):
         return FhirLoggingService._register_user_authentication_event(
-            "110122", "Login",
+            "authorize: Authorize succeeded",
             requesting_client_id, trace_headers,
             entity_what_reference=entity_what_reference)
 
@@ -33,7 +33,7 @@ class FhirLoggingService:
     def register_idp_delegation(entity_what_reference: str, requesting_client_id: str,
                                 idp_name: str, idp_issuer: str, trace_headers: dict):
         return FhirLoggingService._register_user_authentication_event(
-            "110144", "Authentication Delegated to IdP",
+            "idp call: Authentication delegated to IdP",
             requesting_client_id, trace_headers,
             entity_what_reference=entity_what_reference,
             idp_name=idp_name, idp_issuer=idp_issuer)
@@ -41,49 +41,47 @@ class FhirLoggingService:
     @staticmethod
     def register_idp_decision(entity_what_reference: str, requesting_client_id: str,
                               idp_name: str, idp_issuer: str, outcome: str, trace_headers: dict):
+        outcome_desc = "idp login: IdP login succeeded" if outcome == "0" \
+            else "idp login: IdP login failed"
         return FhirLoggingService._register_user_authentication_event(
-            "110145", "IdP Authentication Decision",
+            outcome_desc,
             requesting_client_id, trace_headers,
             outcome=outcome,
             entity_what_reference=entity_what_reference,
             idp_name=idp_name, idp_issuer=idp_issuer)
 
     @staticmethod
-    def register_token_introspection(agent_who_reference: str, requesting_client_id: str,
+    def register_token_introspection(entity_what_reference: str, requesting_client_id: str,
                                      trace_headers: dict):
         return FhirLoggingService._register_user_authentication_event(
-            "110143", "Token Introspection (HTI launch)",
+            "introspect: Introspect succeeded",
             requesting_client_id, trace_headers,
-            agent_who_reference=agent_who_reference)
+            entity_what_reference=entity_what_reference)
 
     @staticmethod
-    def _register_user_authentication_event(subtype_code: str, subtype_display: str,
+    def _register_user_authentication_event(outcome_desc: str,
                                             requesting_client_id: str, trace_headers: dict,
                                             outcome: str = "0",
                                             entity_what_reference: str = None,
-                                            idp_name: str = None, idp_issuer: str = None,
-                                            agent_who_reference: str = None):
-        logger.info(f"Registering User Authentication AuditEvent (subtype [{subtype_code}]) "
+                                            idp_name: str = None, idp_issuer: str = None):
+        logger.info(f"Registering User Authentication AuditEvent ({outcome_desc}) "
                     f"for client [{requesting_client_id}]")
         try:
             data = FhirLoggingService._base_user_authentication_event(
-                subtype_code, subtype_display, requesting_client_id, outcome, trace_headers)
+                outcome_desc, requesting_client_id, outcome, trace_headers)
             if entity_what_reference is not None:
                 FhirLoggingService._add_person_entity(data, entity_what_reference)
             if idp_name or idp_issuer:
                 FhirLoggingService._add_idp_agent(data, idp_name, idp_issuer)
-            if agent_who_reference is not None:
-                FhirLoggingService._add_person_agent(data, agent_who_reference)
             AuditEvent(**data)  # trigger validation
         except Exception:
-            logger.exception(f"Failed to build User Authentication AuditEvent (subtype [{subtype_code}])")
+            logger.exception(f"Failed to build User Authentication AuditEvent ({outcome_desc})")
             return None
         return FhirLoggingService._post_audit_event(data, trace_headers)
 
     @staticmethod
-    def _base_user_authentication_event(subtype_code: str, subtype_display: str,
-                                        requesting_client_id: str, outcome: str,
-                                        trace_headers: dict) -> dict:
+    def _base_user_authentication_event(outcome_desc: str, requesting_client_id: str,
+                                        outcome: str, trace_headers: dict) -> dict:
         return {
             "resourceType": "AuditEvent",
             "meta": {
@@ -99,11 +97,12 @@ class FhirLoggingService:
             },
             "subtype": [{
                 "system": DCM_SYSTEM,
-                "code": subtype_code,
-                "display": subtype_display
+                "code": "110122",
+                "display": "Login"
             }],
             "action": "E",
             "outcome": outcome,
+            "outcomeDesc": outcome_desc,
             "recorded": datetime.now(timezone.utc).isoformat("T", "milliseconds"),
             "agent": [
                 {
@@ -204,17 +203,6 @@ class FhirLoggingService:
                 ]
             },
             "who": agent_who,
-            "requestor": False
-        })
-
-    @staticmethod
-    def _add_person_agent(data: dict, reference: str):
-        person_type = FhirLoggingService._person_type(reference)
-        data["agent"].append({
-            "who": {
-                "reference": reference,
-                "type": person_type
-            },
             "requestor": False
         })
 

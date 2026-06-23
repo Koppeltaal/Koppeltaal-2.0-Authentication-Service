@@ -8,8 +8,8 @@ All notable changes to this project will be documented in this file.
 - IdP issuer (`iss` claim) as `agent.who.identifier` on AuditEvent, using system `http://koppeltaal.nl/oidc/issuer`
 - IdP name as `agent.who.display` (Destination Role ID) on AuditEvent
 - Tests for IdP agent presence, absence, issuer-only, name-only, and Practitioner entity combinations
-- Split login AuditEvents per IG memo topic 11 §3.6: Login (DCM#110122) at `/oauth2/authorize`, Authentication Delegated to IdP (DCM#110144) before the IdP redirect, and IdP Authentication Decision (DCM#110145) at the IdP callback with outcome `0`/`4`
-- Token Introspection AuditEvent (DCM#110143) at `/oauth2/introspect`, only for HTI launch tokens, with the launch person on `agent.who` (IG memo topic 11 §3.7)
+- User Authentication AuditEvents per IG memo topic 11 §3.6, all of type DCM#110114 / subtype DCM#110122 "Login" and differentiated by an `outcomeDesc` prefix: `authorize` at `/oauth2/authorize`, `idp call` before the IdP redirect, and `idp login` at the IdP callback with outcome `0`/`4`
+- Token Introspection logged as the §3.6 `introspect` variant at `/oauth2/introspect`, only for HTI launch tokens, with the launch person on `entity.what`
 
 ### Changed
 - Bumped Python from 3.9 to 3.12 (pyproject.toml + Dockerfile)
