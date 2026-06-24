@@ -23,7 +23,9 @@ All notable changes to this project will be documented in this file.
 - `verify_token` now returns `(token_type, claims)` so the introspect endpoint can distinguish HTI launch tokens from access/client-credentials tokens
 - Audit logging is best-effort: FHIR server connection errors no longer break the authentication flow
 - Removed the combined `register_idp_interaction` AuditEvent in favor of the three split events
+- Log the FHIR server response body on a failed AuditEvent POST (previously only the empty HTTP reason phrase was logged)
 
 ### Fixed
 - Swapped argument order (`identity_provider_name` / `trace_headers`) in `IdpService.consume_idp_code` call to `register_idp_interaction`
 - Replaced deprecated `datetime.utcnow()` with `datetime.now(timezone.utc)`
+- Omit `AuditEvent.entity.what.type` so events pass FHIR server validation; the server rejects the `Reference(Any)` target's declared type with a 422. Temporary workaround until the KT2AuditEvent profile is fixed

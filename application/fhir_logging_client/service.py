@@ -170,9 +170,12 @@ class FhirLoggingService:
         role = PERSON_ROLE_CODES[person_type]
         data["entity"] = [
             {
+                # entity.what.type is intentionally omitted: the FHIR server validates
+                # this Reference(Any) target against a version-pinned base profile that
+                # fails to resolve, rejecting any declared target type (422). Temporary
+                # workaround until the KT2AuditEvent profile is fixed.
                 "what": {
-                    "reference": entity_what_reference,
-                    "type": person_type
+                    "reference": entity_what_reference
                 },
                 "role": {
                     "system": "http://terminology.hl7.org/CodeSystem/object-role",
@@ -225,7 +228,7 @@ class FhirLoggingService:
             logger.info(f"Audit event created successfully with code [{response.status_code}]")
         else:
             logger.warning(f"Failed to create AuditEvent, server responded with code "
-                           f"[{response.status_code}] and reason: [{response.reason}]")
+                           f"[{response.status_code}] and reason: [{response.reason}]: {response.text}")
         return response
 
 

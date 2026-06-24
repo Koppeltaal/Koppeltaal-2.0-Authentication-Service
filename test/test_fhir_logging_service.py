@@ -77,7 +77,10 @@ def test_register_login_happy(mock1, testing_app: FlaskClient):
     assert audit_event.agent[0].who.reference == "Device/456"
     assert audit_event.agent[0].requestor is True
     assert audit_event.agent[0].type.coding[0].code == "110153"
+    assert audit_event.agent[0].who.type == "Device"
     assert audit_event.entity[0].what.reference == "Patient/123"
+    # entity.what.type omitted to dodge the profile's Reference(Any) pin bug
+    assert audit_event.entity[0].what.type is None
     assert audit_event.entity[0].role.code == "1"
     assert audit_event.outcome == "0"
     assert audit_event.outcomeDesc == "authorize: Authorize succeeded"
@@ -249,6 +252,7 @@ def _test_fhir_logging_error_post(*args, **kwargs):
             self.status_code = 422
             self.ok = False
             self.reason = 'Unprocessable Entity'
+            self.text = '{"resourceType": "OperationOutcome"}'
 
     return MockResponse()
 
