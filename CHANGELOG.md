@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - IdP name as `agent.who.display` (Destination Role ID) on AuditEvent
 - Tests for IdP agent presence, absence, issuer-only, name-only, and Practitioner entity combinations
 - User Authentication AuditEvents per IG memo topic 11 §3.6, all of type DCM#110114 / subtype DCM#110122 "Login" and differentiated by an `outcomeDesc` prefix: `authorize` at `/oauth2/authorize`, `idp call` before the IdP redirect, and `idp login` at the IdP callback with outcome `0`/`4`
-- Token Introspection logged as the §3.6 `introspect` variant at `/oauth2/introspect`, only for HTI launch tokens, with the launch person on `entity.what`
+- Token Introspection logged as the §3.6 `introspect` variant at `/oauth2/introspect` for every HTI launch token — outcome `0` when valid, `4` when invalid (`active: false`), so failed introspections stay in the access log but are excluded from retention (only outcome `0` counts as engagement); the launch person is on `entity.what`
 
 ### Changed
 - Bumped Python from 3.9 to 3.12 (pyproject.toml + Dockerfile)

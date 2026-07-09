@@ -273,7 +273,8 @@ def test_introspect_hti_launch_token_logs_audit_event(mock_logging,
     call_args = mock_logging.register_token_introspection.call_args
     assert call_args.args[0] == "Patient/123"
     assert call_args.args[1] == smart_service_client.client_id
-    assert call_args.args[2]['X-Trace-Id'] == payload['jti']
+    assert call_args.args[2] == "0"
+    assert call_args.args[3]['X-Trace-Id'] == payload['jti']
 
 
 @mock.patch('application.oauth_server.views.fhir_logging_service')
@@ -306,7 +307,7 @@ def test_introspect_access_token_logs_no_audit_event(mock_logging,
 
 
 @mock.patch('application.oauth_server.views.fhir_logging_service')
-def test_introspect_invalid_token_logs_no_audit_event(mock_logging,
+def test_introspect_invalid_hti_token_logs_failure_audit_event(mock_logging,
                                                       testing_app: FlaskClient,
                                                       foreign_key: Key,
                                                       smart_service_foreign: SmartService,
@@ -332,5 +333,9 @@ def test_introspect_invalid_token_logs_no_audit_event(mock_logging,
     rv = testing_app.post('/oauth2/introspect', data=data, headers={'Accept': 'application/javascript'})
 
     assert not rv.json['active']
-    mock_logging.register_token_introspection.assert_not_called()
+    mock_logging.register_token_introspection.assert_called_once()
+    call_args = mock_logging.register_token_introspection.call_args
+    assert call_args.args[0] == "Patient/123"
+    assert call_args.args[1] == smart_service_client.client_id
+    assert call_args.args[2] == "4"
 

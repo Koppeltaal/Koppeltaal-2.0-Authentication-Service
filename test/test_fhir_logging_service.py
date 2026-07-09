@@ -212,7 +212,7 @@ def test_register_idp_decision_failure_outcome(mock1, testing_app: FlaskClient):
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
 def test_register_token_introspection_happy(mock1, testing_app: FlaskClient):
     testing_app.get("test")
-    resp = fhir_logging_service.register_token_introspection("Patient/123", "456", {})
+    resp = fhir_logging_service.register_token_introspection("Patient/123", "456", "0", {})
 
     audit_event = AuditEvent(**resp.json()['json'])
 
@@ -230,9 +230,22 @@ def test_register_token_introspection_happy(mock1, testing_app: FlaskClient):
 
 
 @mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
+def test_register_token_introspection_failure_outcome(mock1, testing_app: FlaskClient):
+    testing_app.get("test")
+    resp = fhir_logging_service.register_token_introspection("Patient/123", "456", "4", {})
+
+    audit_event = AuditEvent(**resp.json()['json'])
+
+    assert audit_event.subtype[0].code == "110122"
+    assert audit_event.outcome == "4"
+    assert audit_event.outcomeDesc == "introspect: Introspect failed"
+    assert audit_event.entity[0].what.reference == "Patient/123"
+
+
+@mock.patch('requests.post', side_effect=_test_fhir_logging_happy_post)
 def test_register_token_introspection_non_person_sub_skips_event(mock1, testing_app: FlaskClient):
     testing_app.get("test")
-    result = fhir_logging_service.register_token_introspection("1234567890", "456", {})
+    result = fhir_logging_service.register_token_introspection("1234567890", "456", "0", {})
 
     assert result is None
     mock1.assert_not_called()

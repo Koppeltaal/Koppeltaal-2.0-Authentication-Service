@@ -237,17 +237,22 @@ def create_blueprint() -> Blueprint:
             auth_client_id = auth_token['iss']  # Issuer of the auth token is the client_id of the calling application.
             token_type, decoded = verify_token(token, auth_client_id)
 
+            if token_type == 'hti_launch':
+                # IG memo topic 11 section 3.6 (introspect variant): every introspection of an
+                # HTI launch token is recorded as a User Authentication AuditEvent. A valid token
+                # gets outcome "0"; an invalid one (active=false) gets outcome "4" so it stays in
+                # the access log but is excluded from the retention/cleanup derivation. On failure
+                # the sub is taken from the unverified token.
+                claims = decoded if decoded else unverified_decoded_jwt
+                outcome = "0" if decoded else "4"
+                trace_headers = get_trace_headers(request.headers, default_trace_id=claims.get('jti'))
+                fhir_logging_service.register_token_introspection(claims.get('sub'), auth_client_id,
+                                                                  outcome, trace_headers)
+
             if decoded:
                 # TODO: validate fields
                 rv = decoded.copy()
                 rv['active'] = True
-                if token_type == 'hti_launch':
-                    # IG memo topic 11 section 3.6 (introspect variant): introspection of an
-                    # HTI launch token is recorded as a User Authentication AuditEvent; other
-                    # token types are not.
-                    trace_headers = get_trace_headers(request.headers, default_trace_id=decoded.get('jti'))
-                    fhir_logging_service.register_token_introspection(decoded.get('sub'), auth_client_id,
-                                                                      trace_headers)
                 return jsonify(rv)
             return jsonify({'active': False})
         logger.info("Invalid introspect request - returning access denied")

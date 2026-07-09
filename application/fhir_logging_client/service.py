@@ -52,10 +52,13 @@ class FhirLoggingService:
 
     @staticmethod
     def register_token_introspection(entity_what_reference: str, requesting_client_id: str,
-                                     trace_headers: dict):
+                                     outcome: str, trace_headers: dict):
+        outcome_desc = "introspect: Introspect succeeded" if outcome == "0" \
+            else "introspect: Introspect failed"
         return FhirLoggingService._register_user_authentication_event(
-            "introspect: Introspect succeeded",
+            outcome_desc,
             requesting_client_id, trace_headers,
+            outcome=outcome,
             entity_what_reference=entity_what_reference)
 
     @staticmethod
