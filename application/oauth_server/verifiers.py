@@ -13,7 +13,7 @@ from jwt import DecodeError, InvalidSignatureError
 from application.jwks.service import keypair_service
 from application.oauth_server.jwks_client import CacheHeaderPyJWKClient
 from application.oauth_server.model import SmartService, SmartServiceStatus
-from application.oauth_server.service import LAUNCH_SCOPE_ALLOWED
+from application.oauth_server.service import LAUNCH_SCOPE_ALLOWED, is_auth_server_issuer
 
 logger = logging.getLogger('verifiers')
 consumed_jti_tokens = []
@@ -23,8 +23,8 @@ def verify_token(encoded_token: str, auth_client_id: str) -> Tuple[Optional[str]
     """
     Dispatches the token to the matching verifier and returns (token_type, claims).
 
-    token_type is one of 'access_token', 'client_credentials', 'hti_launch', or None
-    when no verifier condition matched. claims is None when verification failed.
+    token_type is one of 'client_credentials', 'hti_launch', 'access_token', 'id_token',
+    or None when no verifier condition matched. claims is None when verification failed.
     This dispatch is the single source of truth for recognizing an HTI launch token.
     """
     unverified_decoded_jwt = pyjwt.decode(encoded_token, options={"verify_signature": False})
@@ -33,15 +33,21 @@ def verify_token(encoded_token: str, auth_client_id: str) -> Tuple[Optional[str]
 
     token_endpoint = _get_token_endpoint()
     is_client_id = _exists_smart_service(iss)
-    if iss == request.url_root and aud == 'fhir-service':
-        logger.info("verify_token matched to access_token_verifier")
-        return 'access_token', access_token_verifier.verify_and_get_token(encoded_token)
-    elif is_client_id and aud == token_endpoint:
+    if is_client_id and aud == token_endpoint:
         logger.info("verify_token matched to client_credentials_verifier")
         return 'client_credentials', client_credentials_verifier.verify_and_get_token(encoded_token, auth_client_id)
     elif is_client_id and aud.startswith('Device/'):
         logger.info("verify_token matched to hti_token_verifier")
         return 'hti_launch', hti_token_verifier.verify_and_get_token(encoded_token, auth_client_id)
+    elif is_auth_server_issuer(iss):
+        # Anything this server signed itself: the access_token (aud 'fhir-server') and the
+        # id_token (aud is the client_id). Keyed on the issuer only - keying on aud is what
+        # broke both, since neither ever carried the value the dispatch expected. Evaluated
+        # last so a smart service registered under the issuer URL cannot shadow the branches
+        # above.
+        token_type = 'access_token' if unverified_decoded_jwt.get('type') == 'access' else 'id_token'
+        logger.info(f"verify_token matched to access_token_verifier as {token_type}")
+        return token_type, access_token_verifier.verify_and_get_token(encoded_token)
 
     logger.warning(f"Cannot verify token for issuer [{iss}] and aud [{aud}] - it did not match any condition matched to a verifier")
     return None, None
@@ -139,11 +145,12 @@ class AccessTokenVerifier():
         if not _verify_required_fields(unverified_decoded_jwt, ['iss', 'aud', 'jti']):
             return
 
-        if not _verify_jti(unverified_decoded_jwt):
-            return
-
+        # No jti consumption here: introspection is idempotent and a resource server repeats
+        # it for every request it serves. Replay protection on this path would make each token
+        # introspectable exactly once. The caller is separately authenticated with a client
+        # assertion, which is jti-checked.
         iss = unverified_decoded_jwt['iss']
-        if iss != request.url_root:
+        if not is_auth_server_issuer(iss):
             logger.warning("JWT doesn't contain self as iss value")
             return
 

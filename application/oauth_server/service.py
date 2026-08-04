@@ -31,6 +31,24 @@ def get_timestamp_now():
     return timegm(datetime.now(tz=timezone.utc).utctimetuple())
 
 
+def get_auth_server_issuer() -> str:
+    """
+    The `iss` this server puts in the tokens it signs itself.
+
+    Both the minting side and the verifying side must call this, or a self-signed token
+    stops being recognized as self-signed - which is exactly how introspection of
+    access tokens and id_tokens broke. `AUTH_SERVER_ISS` defaults to an empty string
+    when the environment variable is absent (instance/config.py), so an empty value is
+    treated as "not configured" rather than as a literal issuer.
+    """
+    return current_app.config.get('AUTH_SERVER_ISS') or request.url_root
+
+
+def is_auth_server_issuer(iss: str) -> bool:
+    """Trailing slashes are not significant: request.url_root always has one, a configured issuer usually does not."""
+    return bool(iss) and iss.rstrip('/') == get_auth_server_issuer().rstrip('/')
+
+
 class TokenAuthorizationCodeService:
     def check_challenge(self, code_challenge: str, code_verifier: str, code_challenge_method: str) -> bool:
         if code_challenge:
@@ -75,7 +93,7 @@ class TokenService:
         private_key, public_key = keypair_service.get_keypair()
         now = get_timestamp_now()
         payload = {
-            'iss': current_app.config.get('AUTH_SERVER_ISS', request.url_root),
+            'iss': get_auth_server_issuer(),
             'aud': aud,
             'iat': now,
             'nbf': now,

@@ -13,6 +13,7 @@ import jwt as pyjwt
 import requests
 from encodings.base64_codec import base64_decode
 from flask import Blueprint, redirect, request, jsonify, current_app
+from jwt import DecodeError
 
 from application.database import db
 from application.oauth_server.model import Oauth2Session, Oauth2Token, SmartService, IdentityProvider, AllowedRedirect
@@ -213,10 +214,11 @@ def create_blueprint() -> Blueprint:
     @blueprint.route('/oauth2/introspect', methods=['POST'])
     def handle_introspect_request():
         """
-        There are 3 types of JWT tokens:
+        There are 4 types of JWT tokens:
          - launch token (client id from launching party, aud launch URL),
          - client_credential(assertion-type urn:ietf:params:oauth:client-assertion-type:jwt-bearer) token
-         - access_token (iss = myself)
+         - access_token (iss = myself, aud 'fhir-server')
+         - id_token (iss = myself, aud is the client_id)
         :return:
         """
         auth_token = _do_client_assertion()
@@ -225,7 +227,13 @@ def create_blueprint() -> Blueprint:
             if not token:
                 return 'Bad Request, required field token missing', 400
 
-            unverified_decoded_jwt = pyjwt.decode(token, options={"verify_signature": False})
+            try:
+                unverified_decoded_jwt = pyjwt.decode(token, options={"verify_signature": False})
+            except DecodeError as e:
+                # RFC 7662 section 2.2: an unparsable token is simply not active, not a server error.
+                logger.info(f"Introspection of a token that is not a JWT: {e}")
+                return jsonify({'active': False})
+
             iss = unverified_decoded_jwt.get('iss')
             if not iss:
                 return jsonify({'active': False})
