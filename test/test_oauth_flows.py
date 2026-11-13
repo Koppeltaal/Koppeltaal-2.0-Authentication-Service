@@ -11,6 +11,7 @@ import jwt
 import pytest
 from authlib.jose import JsonWebKey, Key
 from flask.testing import FlaskClient
+from sqlalchemy import text
 
 from application import create_app
 from application.database import db
@@ -212,6 +213,23 @@ def test_client_credentials_happy(testing_app: FlaskClient, foreign_key, client_
                             algorithms=['RS512'],
                             audience=['fhir-server'])
     assert jwt_decode['azp'] == smart_service_client.client_id
+
+
+@pytest.mark.parametrize('status', ['DEACTIVATED', 'SUSPENDED'])
+def test_client_credentials_refused_for_blocked_client(status: str, testing_app: FlaskClient, client_key: Key,
+                                                       client_id: str, smart_service_client: SmartService):
+    # domain-admin writes the status; a value this service does not know must not turn into a server error
+    db.session.execute(text("UPDATE smart_service SET status = :status WHERE client_id = :client_id"),
+                       {'status': status, 'client_id': client_id})
+    db.session.commit()
+    db.session.expire_all()
+
+    data = {'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': _client_assertion(testing_app, client_key, client_id),
+            'grant_type': 'client_credentials'}
+
+    rv = testing_app.post('/oauth2/token', data=data, headers={'Accept': 'application/javascript'})
+    assert rv.status_code == 401
 
 
 def _test_authorization_code_happy_post(*args, **kwargs):

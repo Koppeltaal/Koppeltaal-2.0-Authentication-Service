@@ -78,6 +78,8 @@ class SmartServiceStatus(str, Enum):
     PENDING = 'PENDING'
     APPROVED = 'APPROVED'
     REJECTED = 'REJECTED'
+    DEACTIVATED = 'DEACTIVATED'
+    SUSPENDED = 'SUSPENDED'
 
 
 class CrudOperation(Enum):
